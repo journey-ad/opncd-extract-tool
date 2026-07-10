@@ -86,27 +86,44 @@ function normalizePath(p) {
   return p.replace(/\\\\/g, "\\").replace(/\\/g, "/");
 }
 
+// 生成相对路径转换函数：绝对路径 -> 相对 session.directory 的路径。
+function makeToRelPath(directory) {
+  const root = directory ? normalizePath(directory) : null;
+  return (absPath) => {
+    const norm = normalizePath(absPath);
+    if (root && norm.startsWith(root + "/")) return norm.slice(root.length + 1);
+    if (root && norm.startsWith(root)) return norm.slice(root.length);
+    return "_extra/" + norm.replace(/^([A-Za-z]:\/)/, "").replace(/^\//, "");
+  };
+}
+
 export function parseShareHtml(html) {
   const session = extractSession(html);
   const operations = parseOperations(html);
   const { files, errors } = applyOperations(operations);
 
-  const root = session.directory ? normalizePath(session.directory) : null;
+  const toRel = makeToRelPath(session.directory);
+
   const fileList = [];
   for (const [absPath, content] of Object.entries(files)) {
-    const norm = normalizePath(absPath);
-    let rel;
-    if (root && norm.startsWith(root + "/")) rel = norm.slice(root.length + 1);
-    else if (root && norm.startsWith(root)) rel = norm.slice(root.length);
-    else rel = "_extra/" + norm.replace(/^([A-Za-z]:\/)/, "").replace(/^\//, "");
-    fileList.push({ path: rel, size: content.length, content });
+    fileList.push({ path: toRel(absPath), size: content.length, content });
   }
   fileList.sort((a, b) => a.path.localeCompare(b.path));
+
+  // 操作摘要（不含 content/oldString/newString 全文，只含长度）
+  const opList = operations.map((op, idx) => {
+    const path = toRel(op.filePath);
+    if (op.op === "write") {
+      return { idx: idx + 1, op: "write", path, size: op.content.length };
+    }
+    return { idx: idx + 1, op: "replace", path, oldLen: op.oldString.length, newLen: op.newString.length };
+  });
 
   return {
     directory: session.directory || null,
     title: session.title || null,
     files: fileList,
+    operations: opList,
     errors,
     stats: {
       operations: operations.length,

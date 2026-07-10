@@ -57,6 +57,7 @@ app.post("/api/parse", async (req, res) => {
       directory: result.directory,
       title: result.title,
       stats: result.stats,
+      operations: result.operations,
       errors: result.errors.map((e) => ({ filePath: e.op.filePath, reason: e.reason })),
       files: result.files.map((f) => ({ path: f.path, size: f.size })),
     });
