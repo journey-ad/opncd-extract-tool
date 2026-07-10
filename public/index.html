@@ -6,6 +6,9 @@
   <title>opncd Share Restore</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/atom-one-dark.min.css">
   <style>
     * { border-radius: 0 !important; }
     body { font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
@@ -53,19 +56,19 @@
       <div class="space-y-4">
 
         <div style="border: 1px solid #e5e7eb;">
-          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">SHARE URL</div>
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">分享 URL</div>
           <div class="p-3 space-y-2">
             <div class="field-label">分享链接</div>
             <div class="flex gap-2">
               <input v-model="url" class="field-input flex-1" placeholder="https://opncd.ai/share/XXXXXXX" :disabled="parsing" @keydown.enter="parse">
-              <button class="btn btn-primary whitespace-nowrap" :disabled="parsing" @click="parse">{{ parsing ? 'PARSING...' : 'PARSE' }}</button>
+              <button class="btn btn-primary whitespace-nowrap" :disabled="parsing" @click="parse">{{ parsing ? '解析中...' : '解析' }}</button>
             </div>
             <div v-if="statusMsg" class="text-xs leading-relaxed" :class="statusMsgClass">{{ statusMsg }}</div>
           </div>
         </div>
 
         <div v-if="result" style="border: 1px solid #e5e7eb;">
-          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">SESSION META</div>
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">会话信息</div>
           <div class="p-3 space-y-1.5 text-xs">
             <div class="flex">
               <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Title</span>
@@ -79,7 +82,7 @@
         </div>
 
         <div v-if="result" style="border: 1px solid #e5e7eb;">
-          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">STATS</div>
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">统计</div>
           <div class="p-3 grid grid-cols-5 gap-2 text-center">
             <div>
               <div class="text-lg font-bold">{{ result.stats.fileCount }}</div>
@@ -105,7 +108,7 @@
         </div>
 
         <div v-if="result && result.errors.length" style="border: 1px solid #fecaca;">
-          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">ERRORS ({{ result.errors.length }})</div>
+          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">错误 ({{ result.errors.length }})</div>
           <div class="overflow-y-auto" style="max-height: 160px;">
             <div v-for="(e, i) in result.errors" :key="i" class="err-row px-3 py-1.5 text-xs flex gap-2" style="background: #fef2f2;">
               <span class="text-red-600 font-bold shrink-0" style="min-width: 40px;">[ERR]</span>
@@ -115,9 +118,9 @@
         </div>
 
         <div v-if="result" style="border: 1px solid #e5e7eb;">
-          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">ACTIONS</div>
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">操作</div>
           <div class="p-3">
-            <button class="btn btn-primary" :disabled="downloading || !result.files.length" @click="download">{{ downloading ? 'PACKING...' : 'DOWNLOAD ZIP' }}</button>
+            <button class="btn btn-primary" :disabled="downloading || !result.files.length" @click="download">{{ downloading ? '打包中...' : '下载 ZIP' }}</button>
           </div>
         </div>
 
@@ -126,7 +129,7 @@
       <!-- RIGHT: File Tree -->
       <div style="border: 1px solid #e5e7eb; display: flex; flex-direction: column; min-height: 0;">
         <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
-          <span>FILES{{ result ? ' (' + result.files.length + ')' : '' }}</span>
+          <span>文件{{ result ? ' (' + result.files.length + ')' : '' }}</span>
           <div v-if="result && result.files.length" class="text-xs text-gray-500 font-normal">{{ totalSize }}</div>
         </div>
         <div class="overflow-y-auto" style="flex: 1; min-height: 0; max-height: 560px;">
@@ -142,7 +145,7 @@
             </template>
             <template v-else>
               <span class="text-gray-300 inline-block" style="width: 10px;">·</span>
-              <span class="text-gray-900 break-all flex-1">{{ item.node.name }}</span>
+              <span class="text-gray-900 break-all flex-1 cursor-pointer hover:text-blue-700" @click="preview(item)">{{ item.node.name }}</span>
               <span class="text-gray-500 shrink-0 ml-2 pr-3">{{ fmtSize(item.node.size) }}</span>
             </template>
           </div>
@@ -153,7 +156,7 @@
     <!-- BOTTOM: Agent Operations Log -->
     <div style="border: 1px solid #e5e7eb;">
       <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
-        <span>AGENT OPERATIONS{{ result ? ' (' + result.operations.length + ')' : '' }}</span>
+        <span>Agent 操作{{ result ? ' (' + result.operations.length + ')' : '' }}</span>
         <div v-if="result" class="text-xs text-gray-500 font-normal">{{ result.stats.writes }} writes · {{ result.stats.replaces }} replaces</div>
       </div>
       <div class="overflow-y-auto" style="max-height: 220px;">
@@ -166,6 +169,61 @@
             <template v-if="op.op === 'write'">{{ fmtSize(op.size) }}</template>
             <template v-else>old={{ op.oldLen }} · new={{ op.newLen }}</template>
           </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div v-if="previewing || previewLoading" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);" @click.self="closePreview">
+      <div class="bg-white w-full max-w-5xl flex flex-col" style="height: 80vh; border: 1px solid #374151;">
+        <div class="flex items-center justify-between px-3 py-2" style="border-bottom: 1px solid #e5e7eb;">
+          <div class="text-xs flex items-center">
+            <span class="text-gray-400 mr-2">预览</span>
+            <template v-if="previewLoading">加载中...</template>
+            <template v-else-if="previewError"><span class="text-red-600">{{ previewError }}</span></template>
+            <template v-else>
+              <span class="font-bold">{{ previewing.name }}</span>
+              <span class="text-gray-500 ml-2">{{ previewing.path }}</span>
+              <span class="text-gray-400 ml-2">{{ fmtSize(previewing.size) }}</span>
+            </template>
+          </div>
+          <button class="btn" @click="closePreview" aria-label="关闭" style="padding: 4px 8px; line-height: 0;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="flex-1 overflow-auto" :style="previewBgStyle">
+          <template v-if="previewLoading">
+            <div class="p-4 text-xs text-gray-500">加载中...</div>
+          </template>
+          <template v-else-if="previewError">
+            <div class="p-4 text-xs text-red-600">{{ previewError }}</div>
+          </template>
+          <template v-else-if="previewing.kind === 'text'">
+            <pre class="p-3 m-0 text-xs leading-relaxed whitespace-pre-wrap"><code v-html="highlightedHtml" class="hljs"></code></pre>
+          </template>
+          <template v-else-if="previewing.kind === 'image'">
+            <div class="flex items-center justify-center min-h-full p-4">
+              <img :src="previewing.blobUrl" :alt="previewing.name" class="max-w-full max-h-full">
+            </div>
+          </template>
+          <template v-else-if="previewing.kind === 'audio'">
+            <div class="flex items-center justify-center min-h-full p-4">
+              <audio :src="previewing.blobUrl" controls></audio>
+            </div>
+          </template>
+          <template v-else-if="previewing.kind === 'video'">
+            <div class="flex items-center justify-center min-h-full p-4">
+              <video :src="previewing.blobUrl" controls class="max-w-full max-h-full"></video>
+            </div>
+          </template>
+          <template v-else-if="previewing.kind === 'pdf'">
+            <iframe :src="previewing.blobUrl" class="w-full h-full border-0"></iframe>
+          </template>
+          <template v-else>
+            <div class="p-4 text-xs text-gray-500">不支持预览此文件类型</div>
+          </template>
         </div>
       </div>
     </div>
@@ -240,6 +298,13 @@
         const statusMsg = ref('');
         const statusType = ref('idle');
 
+        // 预览相关
+        const zipCache = ref(null);
+        const previewing = ref(null);
+        const previewLoading = ref(false);
+        const previewError = ref('');
+        let currentBlobUrl = null;
+
         const statusText = computed(() => {
           if (parsing.value) return 'PARSING';
           if (downloading.value) return 'PACKING';
@@ -266,6 +331,20 @@
           if (!result.value) return '';
           const sum = result.value.files.reduce((a, f) => a + f.size, 0);
           return fmtSize(sum);
+        });
+
+        const highlightedHtml = computed(() => {
+          if (!previewing.value || previewing.value.kind !== 'text') return '';
+          try {
+            return hljs.highlight(previewing.value.content, { language: previewing.value.lang }).value;
+          } catch {
+            return String(previewing.value.content)
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          }
+        });
+        const previewBgStyle = computed(() => {
+          if (!previewing.value) return 'background: #fff;';
+          return previewing.value.kind === 'text' ? 'background: #282c34;' : 'background: #fff;';
         });
 
         // 文件树
@@ -308,6 +387,8 @@
           if (!/^https?:\/\//.test(u)) { statusType.value = 'error'; statusMsg.value = '链接需以 http:// 或 https:// 开头'; return; }
           parsing.value = true;
           result.value = null;
+          zipCache.value = null;
+          closePreview();
           statusType.value = 'info';
           statusMsg.value = '正在下载并解析分享页...';
           try {
@@ -364,11 +445,103 @@
           }
         }
 
+        const IMG_EXTS = ['png','jpg','jpeg','gif','webp','svg','bmp','ico'];
+        const AUDIO_EXTS = ['mp3','wav','ogg','m4a','flac','aac'];
+        const VIDEO_EXTS = ['mp4','webm','mov','avi','mkv','m4v'];
+        const LANG_MAP = {
+          js:'javascript', mjs:'javascript', cjs:'javascript', jsx:'javascript',
+          ts:'typescript', tsx:'typescript',
+          py:'python', go:'go', rs:'rust', java:'java', kt:'kotlin',
+          c:'c', h:'c', cpp:'cpp', cc:'cpp', hpp:'cpp', cxx:'cpp',
+          html:'xml', xml:'xml', vue:'xml', svelte:'xml',
+          css:'css', scss:'scss', less:'less',
+          json:'json', md:'markdown', markdown:'markdown',
+          sh:'bash', bash:'bash', zsh:'bash',
+          yml:'yaml', yaml:'yaml', toml:'ini', ini:'ini',
+          sql:'sql', php:'php', rb:'ruby', lua:'lua', swift:'swift',
+          dart:'dart', gradle:'gradle', dockerfile:'dockerfile',
+        };
+
+        function inferKind(name) {
+          const ext = (name.split('.').pop() || '').toLowerCase();
+          if (IMG_EXTS.includes(ext)) return 'image';
+          if (AUDIO_EXTS.includes(ext)) return 'audio';
+          if (VIDEO_EXTS.includes(ext)) return 'video';
+          if (ext === 'pdf') return 'pdf';
+          return 'text';
+        }
+        function inferLang(name) {
+          const ext = (name.split('.').pop() || '').toLowerCase();
+          if (name.toLowerCase() === 'dockerfile') return 'dockerfile';
+          return LANG_MAP[ext] || 'plaintext';
+        }
+
+        function revokeBlobUrl() {
+          if (currentBlobUrl) {
+            URL.revokeObjectURL(currentBlobUrl);
+            currentBlobUrl = null;
+          }
+        }
+
+        async function ensureZip() {
+          if (zipCache.value && zipCache.value.jobId === result.value.jobId) {
+            return zipCache.value.zip;
+          }
+          const r = await fetch('/api/download/' + result.value.jobId);
+          if (!r.ok) throw new Error('下载失败');
+          const buf = await r.arrayBuffer();
+          const zip = await JSZip.loadAsync(buf);
+          zipCache.value = { jobId: result.value.jobId, zip };
+          return zip;
+        }
+
+        async function preview(item) {
+          if (item.node.isDir) return;
+          previewLoading.value = true;
+          previewError.value = '';
+          previewing.value = null;
+          try {
+            const zip = await ensureZip();
+            const file = zip.file(item.node.path);
+            if (!file) throw new Error('文件不存在于 ZIP 中');
+            revokeBlobUrl();
+            const kind = inferKind(item.node.name);
+            if (kind === 'text') {
+              const content = await file.async('string');
+              previewing.value = {
+                kind, name: item.node.name, path: item.node.path,
+                size: item.node.size, content, lang: inferLang(item.node.name),
+              };
+            } else {
+              const blob = await file.async('blob');
+              currentBlobUrl = URL.createObjectURL(blob);
+              previewing.value = {
+                kind, name: item.node.name, path: item.node.path,
+                size: item.node.size, blobUrl: currentBlobUrl,
+              };
+            }
+          } catch (e) {
+            previewError.value = e.message;
+          } finally {
+            previewLoading.value = false;
+          }
+        }
+
+        function closePreview() {
+          revokeBlobUrl();
+          previewing.value = null;
+          previewError.value = '';
+          previewLoading.value = false;
+        }
+
         return {
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
           tree, expanded, flatTree, toggle,
           parse, download, fmtSize,
+          previewing, previewLoading, previewError,
+          highlightedHtml, previewBgStyle,
+          preview, closePreview,
         };
       }
     }).mount('#app');
