@@ -17,7 +17,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
-import { parseShareHtml } from "./parser.js";
+import { parseShareHtml, parseOperations } from "./parser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -169,7 +169,7 @@ app.post("/api/parse", async (req, res) => {
       title: result.title,
       stats: result.stats,
       operations: result.operations,
-      errors: result.errors.map((e) => ({ filePath: e.op.filePath, reason: e.reason })),
+      errors: result.errors.map((e) => ({ idx: e.idx, filePath: e.op.filePath, reason: e.reason })),
       files: result.files.map((f) => ({ path: f.path, size: f.size })),
     };
     const meta = {
@@ -219,6 +219,36 @@ app.get("/api/download/:jobId", async (req, res) => {
     stream.pipe(res);
   } catch (e) {
     res.status(500).json({ error: "打包失败: " + e.message });
+  }
+});
+
+app.get("/api/op/:jobId/:idx", async (req, res) => {
+  const { jobId, idx } = req.params;
+  if (!/^[A-Za-z0-9_-]+$/.test(jobId)) return res.status(400).json({ error: "非法 jobId" });
+  const idxNum = parseInt(idx, 10);
+  if (!idxNum || idxNum < 1) return res.status(400).json({ error: "非法 idx" });
+
+  const sharePath = path.join(jobDir(jobId), "share.html");
+  if (!existsSync(sharePath)) return res.status(404).json({ error: "分享页不存在或已过期" });
+
+  try {
+    const html = await fs.readFile(sharePath, "utf8");
+    const operations = parseOperations(html);
+    const op = operations[idxNum - 1];
+    if (!op) return res.status(404).json({ error: "操作不存在" });
+    res.json({
+      idx: idxNum,
+      op: op.op,
+      path: op.filePath,
+      status: op.status || "success",
+      error: op.error || null,
+      replaceAll: !!op.replaceAll,
+      content: op.content || null,
+      oldString: op.oldString || null,
+      newString: op.newString || null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

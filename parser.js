@@ -3,9 +3,9 @@
 //  与 reference/opncd-restore-parser.js 同源。
 // ============================================================
 
-function findInputObjects(str) {
+function findStates(str) {
   const results = [];
-  const re = /input:\$R\[\d+\]=\{|input:\{/g;
+  const re = /state:\$R\[\d+\]=\{|state:\{/g;
   let m;
   while ((m = re.exec(str)) !== null) {
     const start = m.index + m[0].length;
@@ -37,6 +37,12 @@ function extractField(objText, field) {
   try { return eval('"' + m[1] + '"'); } catch (e) { return null; }
 }
 
+function extractBool(objText, field) {
+  const re = new RegExp(field + ":(true|false)");
+  const m = objText.match(re);
+  return m ? m[1] === "true" : false;
+}
+
 function extractSession(html) {
   const session = {};
   const dirM = html.match(/directory:"([^"]*)"/);
@@ -46,19 +52,22 @@ function extractSession(html) {
   return session;
 }
 
-function parseOperations(html) {
-  const inputs = findInputObjects(html);
+export function parseOperations(html) {
+  const states = findStates(html);
   const operations = [];
-  for (const inp of inputs) {
-    const filePath = extractField(inp.text, "filePath");
+  for (const s of states) {
+    const filePath = extractField(s.text, "filePath");
     if (!filePath) continue;
-    const content = extractField(inp.text, "content");
-    const oldString = extractField(inp.text, "oldString");
-    const newString = extractField(inp.text, "newString");
+    const content = extractField(s.text, "content");
+    const oldString = extractField(s.text, "oldString");
+    const newString = extractField(s.text, "newString");
+    const replaceAll = extractBool(s.text, "replaceAll");
+    const status = extractField(s.text, "status");
+    const error = extractField(s.text, "error");
     if (content !== null) {
-      operations.push({ pos: inp.pos, filePath, op: "write", content });
+      operations.push({ pos: s.pos, filePath, op: "write", content, status, error });
     } else if (oldString !== null && newString !== null) {
-      operations.push({ pos: inp.pos, filePath, op: "replace", oldString, newString });
+      operations.push({ pos: s.pos, filePath, op: "replace", oldString, newString, replaceAll, status, error });
     }
   }
   return operations;
@@ -67,16 +76,25 @@ function parseOperations(html) {
 function applyOperations(operations) {
   const files = {};
   const errors = [];
-  for (const op of operations) {
+  for (let i = 0; i < operations.length; i++) {
+    const op = operations[i];
+    // 原始会话失败的操作跳过重放，错误信息通过 opList 标注
+    if (op.status === "error") continue;
     if (op.op === "write") {
       files[op.filePath] = op.content;
     } else if (op.op === "replace") {
-      if (!files[op.filePath]) { errors.push({ op, reason: "文件不存在" }); continue; }
+      if (!files[op.filePath]) { errors.push({ op, idx: i + 1, reason: "文件不存在" }); continue; }
       const cur = files[op.filePath];
       const idx = cur.indexOf(op.oldString);
-      if (idx === -1) { errors.push({ op, reason: "oldString 未找到" }); continue; }
-      if (cur.indexOf(op.oldString, idx + 1) !== -1) { errors.push({ op, reason: "oldString 不唯一" }); continue; }
-      files[op.filePath] = cur.slice(0, idx) + op.newString + cur.slice(idx + op.oldString.length);
+      if (idx === -1) { errors.push({ op, idx: i + 1, reason: "oldString 未找到" }); continue; }
+      if (!op.replaceAll && cur.indexOf(op.oldString, idx + 1) !== -1) {
+        errors.push({ op, idx: i + 1, reason: "oldString 不唯一" }); continue;
+      }
+      if (op.replaceAll) {
+        files[op.filePath] = cur.split(op.oldString).join(op.newString);
+      } else {
+        files[op.filePath] = cur.slice(0, idx) + op.newString + cur.slice(idx + op.oldString.length);
+      }
     }
   }
   return { files, errors };
@@ -113,10 +131,9 @@ export function parseShareHtml(html) {
   // 操作摘要（不含 content/oldString/newString 全文，只含长度）
   const opList = operations.map((op, idx) => {
     const path = toRel(op.filePath);
-    if (op.op === "write") {
-      return { idx: idx + 1, op: "write", path, size: op.content.length };
-    }
-    return { idx: idx + 1, op: "replace", path, oldLen: op.oldString.length, newLen: op.newString.length };
+    const base = { idx: idx + 1, path, status: op.status || "success", error: op.error || null };
+    if (op.op === "write") return { ...base, op: "write", size: op.content.length };
+    return { ...base, op: "replace", oldLen: op.oldString.length, newLen: op.newString.length, replaceAll: !!op.replaceAll };
   });
 
   return {
@@ -130,7 +147,7 @@ export function parseShareHtml(html) {
       writes: operations.filter((o) => o.op === "write").length,
       replaces: operations.filter((o) => o.op === "replace").length,
       fileCount: fileList.length,
-      errorCount: errors.length,
+      errorCount: operations.filter((o) => o.status === "error").length,
     },
   };
 }

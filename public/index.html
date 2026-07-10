@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+  <script src="https://unpkg.com/diff@5.2.0/dist/diff.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/atom-one-dark.min.css">
   <style>
     * { border-radius: 0 !important; }
@@ -108,10 +109,11 @@
         </div>
 
         <div v-if="result && result.errors.length" style="border: 1px solid #fecaca;">
-          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">错误 ({{ result.errors.length }})</div>
+          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">解析错误 ({{ result.errors.length }})</div>
           <div class="overflow-y-auto" style="max-height: 160px;">
             <div v-for="(e, i) in result.errors" :key="i" class="err-row px-3 py-1.5 text-xs flex gap-2" style="background: #fef2f2;">
               <span class="text-red-600 font-bold shrink-0" style="min-width: 40px;">[ERR]</span>
+              <span class="text-gray-500 shrink-0" style="min-width: 50px;">op#{{ e.idx }}</span>
               <span class="text-gray-800 break-all"><span class="font-bold">{{ e.filePath }}</span> · {{ e.reason }}</span>
             </div>
           </div>
@@ -161,10 +163,11 @@
       </div>
       <div class="overflow-y-auto" style="max-height: 220px;">
         <div v-if="!result" class="p-4 text-xs text-gray-400">解析后在此显示 Agent 操作日志...</div>
-        <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center">
+        <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center cursor-pointer hover:bg-gray-50" :style="op.status === 'error' ? 'background: #fffbeb;' : ''" @click="showDiff(op)">
           <span class="text-gray-400 shrink-0" style="min-width: 32px;">{{ String(op.idx).padStart(3, '0') }}</span>
-          <span class="font-bold shrink-0" :class="op.op === 'write' ? 'text-green-700' : 'text-blue-700'" style="min-width: 64px;">{{ op.op === 'write' ? 'WRITE' : 'REPLACE' }}</span>
+          <span class="font-bold shrink-0" :class="op.status === 'error' ? 'text-amber-600' : (op.op === 'write' ? 'text-green-700' : 'text-blue-700')" style="min-width: 64px;">{{ op.op === 'write' ? 'WRITE' : 'REPLACE' }}</span>
           <span class="text-gray-900 break-all flex-1">{{ op.path }}</span>
+          <span v-if="op.status === 'error'" class="text-amber-700 shrink-0" style="max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="op.error">Error: {{ op.error }}</span>
           <span class="text-gray-500 shrink-0">
             <template v-if="op.op === 'write'">{{ fmtSize(op.size) }}</template>
             <template v-else>old={{ op.oldLen }} · new={{ op.newLen }}</template>
@@ -224,6 +227,50 @@
           <template v-else>
             <div class="p-4 text-xs text-gray-500">不支持预览此文件类型</div>
           </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Diff Modal -->
+    <div v-if="diffViewing" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);" @click.self="closeDiff">
+      <div class="bg-white w-full max-w-5xl flex flex-col" style="height: 80vh; border: 1px solid #374151;">
+        <div class="flex items-center justify-between px-3 py-2" style="border-bottom: 1px solid #e5e7eb;">
+          <div class="text-xs flex items-center">
+            <span class="text-gray-400 mr-2">Diff</span>
+            <div class="flex flex-col gap-0">
+              <button @click="switchDiff(-1)" :disabled="diffViewing.idx <= 1" class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-60 disabled:hover:bg-transparent px-1.5 py-0.5 leading-none border-0 bg-transparent cursor-pointer" aria-label="上一个操作">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 14l6-6 6 6"/>
+                </svg>
+              </button>
+              <button @click="switchDiff(1)" :disabled="!result || diffViewing.idx >= result.operations.length" class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-60 disabled:hover:bg-transparent px-1.5 py-0.5 leading-none border-0 bg-transparent cursor-pointer" aria-label="下一个操作">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 10l6 6 6-6"/>
+                </svg>
+              </button>
+            </div>
+            <span class="font-bold ml-2">op#{{ diffViewing.idx }}</span>
+            <span class="ml-2 font-bold" :class="diffViewing.op === 'write' ? 'text-green-700' : 'text-blue-700'">{{ diffViewing.op === 'write' ? 'WRITE' : 'REPLACE' }}</span>
+            <span v-if="diffViewing.status === 'error'" class="ml-2 text-amber-600 font-bold">WARN</span>
+            <span class="text-gray-500 ml-2 break-all">{{ diffViewing.path }}</span>
+          </div>
+          <button class="btn" @click="closeDiff" aria-label="关闭" style="padding: 4px 8px; line-height: 0;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div v-if="diffViewing.status === 'error'" class="px-3 py-2 text-xs text-amber-700" style="background: #fffbeb; border-bottom: 1px solid #fde68a;">
+          <span class="font-bold">原始会话错误：</span>{{ diffViewing.error }}
+        </div>
+        <div class="flex-1 overflow-auto" style="background: #1e1e1e;">
+          <div v-if="diffLoading" class="p-4 text-xs text-gray-400">加载中...</div>
+          <div v-else>
+            <div v-for="(line, i) in diffLines" :key="i" class="px-3 py-0.5 text-xs whitespace-pre-wrap" :style="diffLineStyle(line.type)">
+              <span class="inline-block w-4 select-none">{{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}</span>
+              <span>{{ line.text }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -304,6 +351,11 @@
         const previewLoading = ref(false);
         const previewError = ref('');
         let currentBlobUrl = null;
+
+        // Diff 相关
+        const diffViewing = ref(null);
+        const diffLoading = ref(false);
+        const diffLines = ref([]);
 
         const statusText = computed(() => {
           if (parsing.value) return 'PARSING';
@@ -389,6 +441,7 @@
           result.value = null;
           zipCache.value = null;
           closePreview();
+          closeDiff();
           statusType.value = 'info';
           statusMsg.value = '正在下载并解析分享页...';
           try {
@@ -534,6 +587,62 @@
           previewLoading.value = false;
         }
 
+        function computeDiff(data) {
+          if (data.op === 'write') {
+            const lines = (data.content || '').split('\n');
+            if (lines[lines.length - 1] === '') lines.pop();
+            return lines.map(text => ({ type: 'add', text }));
+          }
+          const diff = Diff.diffLines(data.oldString || '', data.newString || '');
+          const lines = [];
+          for (const part of diff) {
+            const type = part.added ? 'add' : part.removed ? 'del' : 'same';
+            const partLines = part.value.split('\n');
+            if (partLines[partLines.length - 1] === '') partLines.pop();
+            for (const l of partLines) lines.push({ type, text: l });
+          }
+          return lines;
+        }
+
+        function diffLineStyle(type) {
+          if (type === 'add') return 'background: #1e3a1e; color: #6ee7b7;';
+          if (type === 'del') return 'background: #3a1e1e; color: #fca5a5;';
+          return 'color: #d1d5db;';
+        }
+
+        async function showDiff(op) {
+          diffViewing.value = {
+            idx: op.idx, op: op.op, path: op.path,
+            status: op.status, error: op.error,
+          };
+          diffLoading.value = true;
+          diffLines.value = [];
+          try {
+            const r = await fetch('/api/op/' + result.value.jobId + '/' + op.idx);
+            if (!r.ok) throw new Error('获取操作详情失败');
+            const data = await r.json();
+            diffLines.value = computeDiff(data);
+          } catch (e) {
+            diffLines.value = [{ type: 'same', text: '加载失败: ' + e.message }];
+          } finally {
+            diffLoading.value = false;
+          }
+        }
+
+        function closeDiff() {
+          diffViewing.value = null;
+          diffLines.value = [];
+          diffLoading.value = false;
+        }
+
+        async function switchDiff(direction) {
+          if (!diffViewing.value || !result.value) return;
+          const newIdx = diffViewing.value.idx + direction;
+          if (newIdx < 1 || newIdx > result.value.operations.length) return;
+          const op = result.value.operations[newIdx - 1];
+          await showDiff(op);
+        }
+
         return {
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
@@ -542,6 +651,8 @@
           previewing, previewLoading, previewError,
           highlightedHtml, previewBgStyle,
           preview, closePreview,
+          diffViewing, diffLoading, diffLines,
+          showDiff, closeDiff, diffLineStyle, switchDiff,
         };
       }
     }).mount('#app');
