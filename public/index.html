@@ -97,12 +97,34 @@
           <div class="p-3 space-y-1.5 text-xs">
             <div class="flex">
               <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Title</span>
-              <span class="text-gray-900 break-all">{{ result.title || '-' }}</span>
+              <span class="text-gray-900 break-all">{{ result.session.title || '-' }}</span>
             </div>
             <div class="flex">
               <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Directory</span>
-              <span class="text-gray-900 break-all">{{ result.directory || '-' }}</span>
+              <span class="text-gray-900 break-all">{{ result.session.directory || '-' }}</span>
             </div>
+            <template v-if="result.session.modelID">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Model</span>
+                <span class="text-gray-900">{{ result.session.modelID }} <span v-if="result.session.providerID" class="text-gray-400 ml-1">({{ result.session.providerID }})</span></span>
+              </div>
+            </template>
+            <template v-if="result.session.tokens">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Tokens</span>
+                <span class="text-gray-900"><span class="font-bold">{{ fmtNum(result.session.tokens.total) }}</span> <span class="text-gray-400">in {{ fmtNum(result.session.tokens.input) }} · out {{ fmtNum(result.session.tokens.output) }}</span><span v-if="result.session.tokens.reasoning" class="text-purple-600"> · thk {{ fmtNum(result.session.tokens.reasoning) }}</span></span>
+              </div>
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Cache</span>
+                <span class="text-gray-900">{{ fmtNum(result.session.tokens.cacheRead) }} read<span class="text-gray-400"> · {{ cacheHitRate }}% hit · {{ result.session.tokens.chunks }} chunks</span></span>
+              </div>
+            </template>
+            <template v-if="result.session.timeCreated">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Time</span>
+                <span class="text-gray-900">{{ fmtTime(result.session.timeCreated) }}<span v-if="result.session.requests" class="text-gray-400"> · {{ result.session.requests }} reqs</span><span v-if="result.session.timeUpdated" class="text-gray-400"> · {{ fmtDuration(result.session.timeCreated, result.session.timeUpdated) }}</span></span>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -483,6 +505,27 @@
           expanded.value[path] = !expanded.value[path];
         }
 
+        function fmtNum(n) {
+          if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+          return String(n);
+        }
+        function fmtTime(ts) {
+          const d = new Date(ts);
+          return d.toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        }
+        function fmtDuration(start, end) {
+          const s = Math.round((end - start) / 1000);
+          if (s < 60) return s + 's';
+          if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+          return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+        }
+        const cacheHitRate = computed(() => {
+          const t = result.value?.session?.tokens;
+          if (!t || t.input + t.cacheRead === 0) return 0;
+          return (t.cacheRead / (t.input + t.cacheRead) * 100).toFixed(1);
+        });
+
         function fmtSize(n) {
           if (n < 1024) return n + ' B';
           if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
@@ -722,7 +765,7 @@
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
           tree, expanded, flatTree, toggle,
-          parse, download, fmtSize,
+          parse, download, fmtSize, fmtNum, fmtTime, fmtDuration, cacheHitRate,
           previewing, previewLoading, previewError,
           highlightedHtml, previewBgStyle,
           preview, closePreview,

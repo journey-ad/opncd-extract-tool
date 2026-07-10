@@ -107,6 +107,51 @@ function extractSession(html) {
   if (dirM) session.directory = dirM[1].replace(/\\\\/g, "\\");
   const titleM = html.match(/title:"([^"]*)"/);
   if (titleM) session.title = titleM[1];
+
+  // 会话元数据（token、model 等，仅 opncd.ai 分享页有）
+  // 多个 script 标签中都有 ($R[，需要找到包含 sessionID 的那个
+  let script = "";
+  let pos = 0;
+  while ((pos = html.indexOf("($R[", pos)) !== -1) {
+    const end = html.indexOf("</script>", pos);
+    const s = html.substring(pos, end > 0 ? end : pos + 100000);
+    if (s.includes("sessionID:") || s.includes('session:"') || s.includes("session:$R")) {
+      script = s;
+      break;
+    }
+    pos += 1;
+  }
+  if (!script) return session;
+
+  session.modelID = (script.match(/modelID:"([^"]+)"/) || [])[1] || null;
+  session.providerID = (script.match(/providerID:"([^"]+)"/) || [])[1] || null;
+
+  // 汇总 token 用量
+  const tokenRe = /tokens:\$R\[\d+\]=\{total:(\d+),input:(\d+),output:(\d+),reasoning:(\d+),cache:\$R\[\d+\]=\{read:(\d+),write:(\d+)\}\}/g;
+  let tm, total = 0, input = 0, output = 0, reasoning = 0, cacheRead = 0, chunks = 0;
+  while ((tm = tokenRe.exec(script)) !== null) {
+    total += parseInt(tm[1]);
+    input += parseInt(tm[2]);
+    output += parseInt(tm[3]);
+    reasoning += parseInt(tm[4]);
+    cacheRead += parseInt(tm[5]);
+    chunks++;
+  }
+  if (chunks > 0) {
+    session.tokens = { total, input, output, reasoning, cacheRead, chunks };
+  }
+
+  // 时间
+  const timeM = script.match(/time:\$R\[\d+\]=\{created:(\d+),updated:(\d+)\}/);
+  if (timeM) {
+    session.timeCreated = parseInt(timeM[1]);
+    session.timeUpdated = parseInt(timeM[2]);
+  }
+
+  // 请求数
+  const assistantCount = (script.match(/role:"assistant"/g) || []).length;
+  if (assistantCount > 0) session.requests = assistantCount;
+
   return session;
 }
 
@@ -233,8 +278,16 @@ export function parseShareHtml(html) {
   });
 
   return {
-    directory: session.directory || null,
-    title: session.title || null,
+    session: {
+      directory: session.directory || null,
+      title: session.title || null,
+      modelID: session.modelID || null,
+      providerID: session.providerID || null,
+      tokens: session.tokens || null,
+      timeCreated: session.timeCreated || null,
+      timeUpdated: session.timeUpdated || null,
+      requests: session.requests || null,
+    },
     files: fileList,
     operations: opList,
     errors,

@@ -123,7 +123,7 @@ app.post("/api/parse", async (req, res) => {
       } catch {}
       const elapsed = Date.now() - startedAt;
       log(jobId, "INFO", "parse done (cache hit)", {
-        title: cached.title || "",
+        title: (cached.session?.title || cached.title) || "",
         files: cached.files.length,
         ops: cached.stats.operations,
         errors: cached.stats.errorCount,
@@ -131,8 +131,7 @@ app.post("/api/parse", async (req, res) => {
       });
       return res.json({
         jobId: cached.jobId,
-        directory: cached.directory,
-        title: cached.title,
+        session: cached.session || {},
         stats: cached.stats,
         operations: cached.operations,
         errors: cached.errors,
@@ -166,8 +165,7 @@ app.post("/api/parse", async (req, res) => {
     // 3. 落盘元数据（含完整响应字段，供缓存命中直接返回）
     const response = {
       jobId,
-      directory: result.directory,
-      title: result.title,
+      session: result.session,
       stats: result.stats,
       operations: result.operations,
       errors: result.errors.map((e) => ({ idx: e.idx, filePath: e.op.filePath, reason: e.reason })),
@@ -184,7 +182,7 @@ app.post("/api/parse", async (req, res) => {
 
     const elapsed = Date.now() - startedAt;
     log(jobId, "INFO", "parse done", {
-      title: result.title || "",
+      title: result.session?.title || "",
       files: result.files.length,
       ops: result.stats.operations,
       errors: result.stats.errorCount,
