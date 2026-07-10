@@ -266,9 +266,11 @@
         <div class="flex-1 overflow-auto" style="background: #1e1e1e;">
           <div v-if="diffLoading" class="p-4 text-xs text-gray-400">加载中...</div>
           <div v-else>
-            <div v-for="(line, i) in diffLines" :key="i" class="px-3 py-0.5 text-xs whitespace-pre-wrap" :style="diffLineStyle(line.type)">
-              <span class="inline-block w-4 select-none">{{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}</span>
-              <span>{{ line.text }}</span>
+            <div v-for="(line, i) in diffLines" :key="i" class="px-3 py-0.5 text-xs flex items-start font-mono" :style="diffLineStyle(line.type)">
+              <span class="w-12 text-right pr-2 text-gray-500 select-none shrink-0">{{ line.oldNum || '' }}</span>
+              <span class="w-12 text-right pr-2 text-gray-500 select-none shrink-0">{{ line.newNum || '' }}</span>
+              <span class="w-4 select-none shrink-0">{{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}</span>
+              <span class="flex-1 whitespace-pre-wrap">{{ line.text }}</span>
             </div>
           </div>
         </div>
@@ -356,6 +358,7 @@
         const diffViewing = ref(null);
         const diffLoading = ref(false);
         const diffLines = ref([]);
+        const opsCache = ref(null);
 
         const statusText = computed(() => {
           if (parsing.value) return 'PARSING';
@@ -440,6 +443,7 @@
           parsing.value = true;
           result.value = null;
           zipCache.value = null;
+          opsCache.value = null;
           closePreview();
           closeDiff();
           statusType.value = 'info';
@@ -587,19 +591,48 @@
           previewLoading.value = false;
         }
 
-        function computeDiff(data) {
-          if (data.op === 'write') {
-            const lines = (data.content || '').split('\n');
+        function computeDiff(op) {
+          if (op.op === 'write') {
+            const lines = (op.content || '').split('\n');
             if (lines[lines.length - 1] === '') lines.pop();
-            return lines.map(text => ({ type: 'add', text }));
+            return lines.map((text, i) => ({ type: 'add', text, oldNum: null, newNum: i + 1 }));
           }
-          const diff = Diff.diffLines(data.oldString || '', data.newString || '');
+          // replace: 优先用 metadata.diff（含原始行号），fallback 到 jsdiff 计算
+          if (op.diff) {
+            const parsed = Diff.parsePatch(op.diff);
+            if (parsed.length && parsed[0].hunks.length) {
+              const result = [];
+              for (const hunk of parsed[0].hunks) {
+                let oldLine = hunk.oldStart;
+                let newLine = hunk.newStart;
+                for (const line of hunk.lines) {
+                  const prefix = line[0];
+                  const text = line.slice(1);
+                  if (prefix === '-') {
+                    result.push({ type: 'del', text, oldNum: oldLine++, newNum: null });
+                  } else if (prefix === '+') {
+                    result.push({ type: 'add', text, oldNum: null, newNum: newLine++ });
+                  } else if (prefix === ' ') {
+                    result.push({ type: 'same', text, oldNum: oldLine++, newNum: newLine++ });
+                  }
+                }
+              }
+              return result;
+            }
+          }
+          // fallback: 无 diff 时用 jsdiff 计算（无原始行号，从 1 开始）
+          const diff = Diff.diffLines(op.oldString || '', op.newString || '');
           const lines = [];
+          let oldLine = 1, newLine = 1;
           for (const part of diff) {
             const type = part.added ? 'add' : part.removed ? 'del' : 'same';
             const partLines = part.value.split('\n');
             if (partLines[partLines.length - 1] === '') partLines.pop();
-            for (const l of partLines) lines.push({ type, text: l });
+            for (const l of partLines) {
+              if (type === 'del') lines.push({ type, text: l, oldNum: oldLine++, newNum: null });
+              else if (type === 'add') lines.push({ type, text: l, oldNum: null, newNum: newLine++ });
+              else lines.push({ type, text: l, oldNum: oldLine++, newNum: newLine++ });
+            }
           }
           return lines;
         }
@@ -610,6 +643,17 @@
           return 'color: #d1d5db;';
         }
 
+        async function ensureOps() {
+          if (opsCache.value && opsCache.value.jobId === result.value.jobId) {
+            return opsCache.value.operations;
+          }
+          const r = await fetch('/api/ops/' + result.value.jobId);
+          if (!r.ok) throw new Error('获取操作列表失败');
+          const operations = await r.json();
+          opsCache.value = { jobId: result.value.jobId, operations };
+          return operations;
+        }
+
         async function showDiff(op) {
           diffViewing.value = {
             idx: op.idx, op: op.op, path: op.path,
@@ -618,10 +662,10 @@
           diffLoading.value = true;
           diffLines.value = [];
           try {
-            const r = await fetch('/api/op/' + result.value.jobId + '/' + op.idx);
-            if (!r.ok) throw new Error('获取操作详情失败');
-            const data = await r.json();
-            diffLines.value = computeDiff(data);
+            const operations = await ensureOps();
+            const fullOp = operations[op.idx - 1];
+            if (!fullOp) throw new Error('操作不存在');
+            diffLines.value = computeDiff(fullOp);
           } catch (e) {
             diffLines.value = [{ type: 'same', text: '加载失败: ' + e.message }];
           } finally {

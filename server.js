@@ -222,22 +222,16 @@ app.get("/api/download/:jobId", async (req, res) => {
   }
 });
 
-app.get("/api/op/:jobId/:idx", async (req, res) => {
-  const { jobId, idx } = req.params;
+app.get("/api/ops/:jobId", async (req, res) => {
+  const { jobId } = req.params;
   if (!/^[A-Za-z0-9_-]+$/.test(jobId)) return res.status(400).json({ error: "非法 jobId" });
-  const idxNum = parseInt(idx, 10);
-  if (!idxNum || idxNum < 1) return res.status(400).json({ error: "非法 idx" });
-
   const sharePath = path.join(jobDir(jobId), "share.html");
   if (!existsSync(sharePath)) return res.status(404).json({ error: "分享页不存在或已过期" });
-
   try {
     const html = await fs.readFile(sharePath, "utf8");
     const operations = parseOperations(html);
-    const op = operations[idxNum - 1];
-    if (!op) return res.status(404).json({ error: "操作不存在" });
-    res.json({
-      idx: idxNum,
+    res.json(operations.map((op, i) => ({
+      idx: i + 1,
       op: op.op,
       path: op.filePath,
       status: op.status || "success",
@@ -246,7 +240,8 @@ app.get("/api/op/:jobId/:idx", async (req, res) => {
       content: op.content || null,
       oldString: op.oldString || null,
       newString: op.newString || null,
-    });
+      diff: op.diff || null,
+    })));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -64,10 +64,11 @@ export function parseOperations(html) {
     const replaceAll = extractBool(s.text, "replaceAll");
     const status = extractField(s.text, "status");
     const error = extractField(s.text, "error");
+    const diff = extractField(s.text, "diff");
     if (content !== null) {
-      operations.push({ pos: s.pos, filePath, op: "write", content, status, error });
+      operations.push({ pos: s.pos, filePath, op: "write", content, status, error, diff });
     } else if (oldString !== null && newString !== null) {
-      operations.push({ pos: s.pos, filePath, op: "replace", oldString, newString, replaceAll, status, error });
+      operations.push({ pos: s.pos, filePath, op: "replace", oldString, newString, replaceAll, status, error, diff });
     }
   }
   return operations;
