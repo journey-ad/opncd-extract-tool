@@ -1,0 +1,14 @@
+{
+  "name": "opncd-restore-tool",
+  "version": "1.0.0",
+  "description": "opncd.ai 分享页还原工具：下载 HTML -> 解析文件 -> 打包 ZIP",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "jszip": "^3.10.1"
+  }
+}

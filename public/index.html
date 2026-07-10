@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>opncd Share Restore</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    * { border-radius: 0 !important; }
+    body { font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
+    input, select, textarea, button { border: 1px solid #d1d5db; outline: none; }
+    input:focus, select:focus, textarea:focus, button:focus { border-color: #6b7280; box-shadow: none; }
+    .section-title { border-bottom: 1px solid #e5e7eb; letter-spacing: 0.05em; }
+    .btn {
+      border: 1px solid #374151; background: #fff; color: #111827;
+      font-size: 13px; padding: 4px 14px; cursor: pointer; transition: background 0.1s;
+    }
+    .btn:hover { background: #f9fafb; }
+    .btn:active { background: #e5e7eb; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { border-color: #111827; background: #111827; color: #fff; }
+    .btn-primary:hover { background: #374151; }
+    .btn-primary:disabled:hover { background: #111827; }
+    .field-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+    .field-input { width: 100%; font-size: 13px; padding: 4px 8px; border: 1px solid #d1d5db; background: #fff; color: #111827; }
+    .field-input:disabled { background: #f9fafb; color: #6b7280; }
+    .file-row { border-bottom: 1px solid #f3f4f6; }
+    .file-row:last-child { border-bottom: none; }
+    .file-row:hover { background: #f9fafb; }
+    .err-row { border-bottom: 1px solid #fecaca; }
+    .err-row:last-child { border-bottom: none; }
+  </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+  <div id="app" class="max-w-7xl mx-auto p-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
+      <div>
+        <h1 class="text-sm font-bold tracking-wider">opncd Share Restore</h1>
+        <p class="text-xs text-gray-500 mt-0.5">下载 opncd.ai 分享页 · 解析 Agent 产物 · 打包 ZIP</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="inline-block w-1.5 h-1.5" :class="dotClass"></span>
+        <span :class="statusColor">{{ statusText }}</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- LEFT: Controls -->
+      <div class="space-y-4">
+
+        <!-- URL INPUT -->
+        <div style="border: 1px solid #e5e7eb;">
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">SHARE URL</div>
+          <div class="p-3 space-y-2">
+            <div class="field-label">分享链接</div>
+            <div class="flex gap-2">
+              <input v-model="url" class="field-input flex-1" placeholder="https://opncd.ai/share/XXXXXXX" :disabled="parsing" @keydown.enter="parse">
+              <button class="btn btn-primary whitespace-nowrap" :disabled="parsing" @click="parse">{{ parsing ? 'PARSING...' : 'PARSE' }}</button>
+            </div>
+            <div v-if="statusMsg" class="text-xs leading-relaxed" :class="statusMsgClass">{{ statusMsg }}</div>
+          </div>
+        </div>
+
+        <!-- META -->
+        <div v-if="result" style="border: 1px solid #e5e7eb;">
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">SESSION META</div>
+          <div class="p-3 space-y-1.5 text-xs">
+            <div class="flex">
+              <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Title</span>
+              <span class="text-gray-900 break-all">{{ result.title || '-' }}</span>
+            </div>
+            <div class="flex">
+              <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Directory</span>
+              <span class="text-gray-900 break-all">{{ result.directory || '-' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div v-if="result" style="border: 1px solid #e5e7eb;">
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">STATS</div>
+          <div class="p-3 grid grid-cols-5 gap-2 text-center">
+            <div>
+              <div class="text-lg font-bold">{{ result.stats.fileCount }}</div>
+              <div class="text-xs text-gray-500 mt-0.5">FILES</div>
+            </div>
+            <div>
+              <div class="text-lg font-bold">{{ result.stats.operations }}</div>
+              <div class="text-xs text-gray-500 mt-0.5">OPS</div>
+            </div>
+            <div>
+              <div class="text-lg font-bold">{{ result.stats.writes }}</div>
+              <div class="text-xs text-gray-500 mt-0.5">WRITES</div>
+            </div>
+            <div>
+              <div class="text-lg font-bold">{{ result.stats.replaces }}</div>
+              <div class="text-xs text-gray-500 mt-0.5">REPLACES</div>
+            </div>
+            <div>
+              <div class="text-lg font-bold" :class="result.stats.errorCount ? 'text-red-600' : 'text-green-700'">{{ result.stats.errorCount }}</div>
+              <div class="text-xs text-gray-500 mt-0.5">ERRORS</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ERRORS -->
+        <div v-if="result && result.errors.length" style="border: 1px solid #fecaca;">
+          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">ERRORS ({{ result.errors.length }})</div>
+          <div class="overflow-y-auto" style="max-height: 160px;">
+            <div v-for="(e, i) in result.errors" :key="i" class="err-row px-3 py-1.5 text-xs flex gap-2" style="background: #fef2f2;">
+              <span class="text-red-600 font-bold shrink-0" style="min-width: 40px;">[ERR]</span>
+              <span class="text-gray-800 break-all"><span class="font-bold">{{ e.filePath }}</span> · {{ e.reason }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div v-if="result" style="border: 1px solid #e5e7eb;">
+          <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">ACTIONS</div>
+          <div class="p-3">
+            <button class="btn btn-primary" :disabled="downloading || !result.files.length" @click="download">{{ downloading ? 'PACKING...' : 'DOWNLOAD ZIP' }}</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Files -->
+      <div style="border: 1px solid #e5e7eb; display: flex; flex-direction: column; min-height: 0;">
+        <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
+          <span>FILES{{ result ? ' (' + result.files.length + ')' : '' }}</span>
+          <div v-if="result && result.files.length" class="text-xs text-gray-500 font-normal">{{ totalSize }}</div>
+        </div>
+        <div class="overflow-y-auto" style="flex: 1; min-height: 0; max-height: calc(100vh - 160px);">
+          <div v-if="!result" class="p-4 text-xs text-gray-400">解析后在此显示文件列表...</div>
+          <div v-else-if="result.files.length === 0" class="p-4 text-xs text-gray-400">无文件</div>
+          <div v-for="(f, i) in result.files" :key="i" class="file-row px-3 py-1.5 flex justify-between text-xs">
+            <span class="text-gray-900 break-all">{{ f.path }}</span>
+            <span class="text-gray-500 shrink-0 ml-2">{{ fmtSize(f.size) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+      setup() {
+        const url = ref('https://opncd.ai/share/EYJa8Tle');
+        const parsing = ref(false);
+        const downloading = ref(false);
+        const result = ref(null);
+        const statusMsg = ref('');
+        const statusType = ref('idle'); // idle | info | success | error
+
+        const statusText = computed(() => {
+          if (parsing.value) return 'PARSING';
+          if (downloading.value) return 'PACKING';
+          if (result.value) return 'READY';
+          return 'IDLE';
+        });
+        const statusColor = computed(() => {
+          if (parsing.value || downloading.value) return 'text-gray-500';
+          if (result.value) return 'text-green-700';
+          return 'text-gray-400';
+        });
+        const dotClass = computed(() => {
+          if (parsing.value || downloading.value) return 'bg-gray-400';
+          if (statusType.value === 'error') return 'bg-red-500';
+          if (result.value) return 'bg-green-600';
+          return 'bg-gray-300';
+        });
+        const statusMsgClass = computed(() => {
+          if (statusType.value === 'error') return 'text-red-600';
+          if (statusType.value === 'success') return 'text-green-700';
+          return 'text-gray-600';
+        });
+        const totalSize = computed(() => {
+          if (!result.value) return '';
+          const sum = result.value.files.reduce((a, f) => a + f.size, 0);
+          return fmtSize(sum);
+        });
+
+        function fmtSize(n) {
+          if (n < 1024) return n + ' B';
+          if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+          return (n / 1024 / 1024).toFixed(2) + ' MB';
+        }
+
+        async function parse() {
+          const u = url.value.trim();
+          if (!u) { statusType.value = 'error'; statusMsg.value = '请输入分享链接'; return; }
+          if (!/^https?:\/\//.test(u)) { statusType.value = 'error'; statusMsg.value = '链接需以 http:// 或 https:// 开头'; return; }
+          parsing.value = true;
+          result.value = null;
+          statusType.value = 'info';
+          statusMsg.value = '正在下载并解析分享页...';
+          try {
+            const r = await fetch('/api/parse', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: u }),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || '解析失败');
+            result.value = data;
+            statusType.value = 'success';
+            statusMsg.value = `解析完成 · ${data.stats.fileCount} 个文件 · ${data.stats.operations} 次操作` + (data.stats.errorCount ? ` · ${data.stats.errorCount} 个错误` : '');
+          } catch (e) {
+            statusType.value = 'error';
+            statusMsg.value = '错误：' + e.message;
+          } finally {
+            parsing.value = false;
+          }
+        }
+
+        function pickFilename(disposition, fallback) {
+          if (!disposition) return fallback;
+          const star = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+          if (star) { try { return decodeURIComponent(star[1]); } catch { return star[1]; } }
+          const plain = disposition.match(/filename="([^"]+)"/);
+          return plain ? plain[1] : fallback;
+        }
+
+        async function download() {
+          if (!result.value) return;
+          downloading.value = true;
+          statusType.value = 'info';
+          statusMsg.value = '正在打包 ZIP...';
+          try {
+            const r = await fetch('/api/download/' + result.value.jobId);
+            if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || '下载失败'); }
+            const blob = await r.blob();
+            const a = document.createElement('a');
+            const objUrl = URL.createObjectURL(blob);
+            a.href = objUrl;
+            a.download = pickFilename(r.headers.get('Content-Disposition'), 'restore.zip');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(objUrl);
+            statusType.value = 'success';
+            statusMsg.value = '已开始下载';
+          } catch (e) {
+            statusType.value = 'error';
+            statusMsg.value = '下载错误：' + e.message;
+          } finally {
+            downloading.value = false;
+          }
+        }
+
+        return {
+          url, parsing, downloading, result, statusMsg, statusMsgClass,
+          statusText, statusColor, dotClass, totalSize,
+          parse, download, fmtSize,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
