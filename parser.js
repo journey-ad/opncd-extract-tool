@@ -3,6 +3,8 @@
 //  与 reference/opncd-restore-parser.js 同源。
 // ============================================================
 
+import { applyPatch } from "diff";
+
 function findStates(str) {
   const results = [];
   const re = /state:\$R\[\d+\]=\{|state:\{/g;
@@ -43,6 +45,62 @@ function extractBool(objText, field) {
   return m ? m[1] === "true" : false;
 }
 
+// 从 read 工具的 output XML 中提取文件内容（去掉行号前缀）。
+// 完整读取（从第1行到文件尾）：返回 { content }。
+// 部分读取：返回 { content, startLine, endLine }，仅覆盖对应行范围。
+// 非 read 输出或无 <content>：返回 null。
+function extractContentFromReadOutput(rawStateText) {
+  const output = extractField(rawStateText, "output");
+  if (!output) return null;
+  const ctStart = output.indexOf("<content>");
+  if (ctStart === -1) return null;
+  const ctEnd = output.indexOf("</content>", ctStart);
+  if (ctEnd === -1) return null;
+
+  const rawLines = output.slice(ctStart + 9, ctEnd).split("\n");
+
+  // 先解析尾行标记（标记可能在最后一行或倒数第二行，取决于尾随空行）
+  let partialStart = null, partialEnd = null, totalLines = null;
+  for (let j = rawLines.length - 1; j >= 0; j--) {
+    const showM = rawLines[j].match(/\(Showing lines (\d+)-(\d+) of (\d+)/);
+    if (showM) {
+      partialStart = parseInt(showM[1]);
+      partialEnd = parseInt(showM[2]);
+      break;
+    }
+    const endM = rawLines[j].match(/\(End of file - total (\d+) lines\)/);
+    if (endM) {
+      totalLines = parseInt(endM[1]);
+      break;
+    }
+  }
+
+  // 去掉尾部的空行和标记行
+  while (rawLines.length && (rawLines[rawLines.length - 1] === "" || rawLines[rawLines.length - 1].startsWith("("))) {
+    rawLines.pop();
+  }
+  while (rawLines.length && rawLines[0] === "") {
+    rawLines.shift();
+  }
+  if (rawLines.length === 0) return null;
+
+  // 去掉行号前缀得到纯文件内容
+  const content = rawLines.map((l) => l.replace(/^\d+: /, "")).join("\n");
+
+  // 部分读取：有 (Showing lines) 标记，或首行不是第1行
+  if (partialStart !== null) {
+    return { content, startLine: partialStart, endLine: partialEnd };
+  }
+  if (rawLines[0] && !rawLines[0].startsWith("1: ")) {
+    const firstNumM = rawLines[0].match(/^(\d+): /);
+    const start = firstNumM ? parseInt(firstNumM[1]) : 1;
+    return { content, startLine: start, endLine: totalLines || (start + rawLines.length - 1) };
+  }
+
+  // 完整读取（从第1行开始）
+  return { content };
+}
+
 function extractSession(html) {
   const session = {};
   const dirM = html.match(/directory:"([^"]*)"/);
@@ -69,6 +127,18 @@ export function parseOperations(html) {
       operations.push({ pos: s.pos, filePath, op: "write", content, status, error, diff });
     } else if (oldString !== null && newString !== null) {
       operations.push({ pos: s.pos, filePath, op: "replace", oldString, newString, replaceAll, status, error, diff });
+    } else {
+      // read 工具的 output 中可能包含完整或部分文件内容
+      const snap = extractContentFromReadOutput(s.text);
+      if (snap !== null) {
+        operations.push({
+          pos: s.pos, filePath, op: "read",
+          content: snap.content,
+          startLine: snap.startLine || null,
+          endLine: snap.endLine || null,
+          status, error,
+        });
+      }
     }
   }
   return operations;
@@ -79,22 +149,48 @@ function applyOperations(operations) {
   const errors = [];
   for (let i = 0; i < operations.length; i++) {
     const op = operations[i];
-    // 原始会话失败的操作跳过重放，错误信息通过 opList 标注
     if (op.status === "error") continue;
     if (op.op === "write") {
       files[op.filePath] = op.content;
+    } else if (op.op === "read") {
+      if (op.startLine != null && files[op.filePath]) {
+        // 部分读取：仅替换对应行范围
+        const curLines = files[op.filePath].split("\n");
+        const newLines = op.content.split("\n");
+        const start = op.startLine - 1;
+        const count = op.endLine - op.startLine + 1;
+        curLines.splice(start, count, ...newLines);
+        files[op.filePath] = curLines.join("\n");
+      } else {
+        // 完整读取或无现有文件：直接覆盖
+        files[op.filePath] = op.content;
+      }
     } else if (op.op === "replace") {
       if (!files[op.filePath]) { errors.push({ op, idx: i + 1, reason: "文件不存在" }); continue; }
       const cur = files[op.filePath];
-      const idx = cur.indexOf(op.oldString);
-      if (idx === -1) { errors.push({ op, idx: i + 1, reason: "oldString 未找到" }); continue; }
-      if (!op.replaceAll && cur.indexOf(op.oldString, idx + 1) !== -1) {
-        errors.push({ op, idx: i + 1, reason: "oldString 不唯一" }); continue;
+      let applied = false;
+      if (op.diff) {
+        try {
+          const result = applyPatch(cur, op.diff, { fuzzFactor: 2 });
+          if (result !== false) {
+            files[op.filePath] = result;
+            applied = true;
+          }
+        } catch {}
       }
-      if (op.replaceAll) {
-        files[op.filePath] = cur.split(op.oldString).join(op.newString);
-      } else {
-        files[op.filePath] = cur.slice(0, idx) + op.newString + cur.slice(idx + op.oldString.length);
+      if (!applied) {
+        const idx = cur.indexOf(op.oldString);
+        if (idx !== -1 && (op.replaceAll || cur.indexOf(op.oldString, idx + 1) === -1)) {
+          if (op.replaceAll) {
+            files[op.filePath] = cur.split(op.oldString).join(op.newString);
+          } else {
+            files[op.filePath] = cur.slice(0, idx) + op.newString + cur.slice(idx + op.oldString.length);
+          }
+          applied = true;
+        }
+      }
+      if (!applied) {
+        errors.push({ op, idx: i + 1, reason: "oldString 未找到" });
       }
     }
   }
@@ -105,7 +201,6 @@ function normalizePath(p) {
   return p.replace(/\\\\/g, "\\").replace(/\\/g, "/");
 }
 
-// 生成相对路径转换函数：绝对路径 -> 相对 session.directory 的路径。
 function makeToRelPath(directory) {
   const root = directory ? normalizePath(directory) : null;
   return (absPath) => {
@@ -129,11 +224,11 @@ export function parseShareHtml(html) {
   }
   fileList.sort((a, b) => a.path.localeCompare(b.path));
 
-  // 操作摘要（不含 content/oldString/newString 全文，只含长度）
   const opList = operations.map((op, idx) => {
     const path = toRel(op.filePath);
     const base = { idx: idx + 1, path, status: op.status || "success", error: op.error || null };
     if (op.op === "write") return { ...base, op: "write", size: op.content.length };
+    if (op.op === "read") return { ...base, op: "read", size: op.content.length };
     return { ...base, op: "replace", oldLen: op.oldString.length, newLen: op.newString.length, replaceAll: !!op.replaceAll };
   });
 
@@ -147,6 +242,7 @@ export function parseShareHtml(html) {
       operations: operations.length,
       writes: operations.filter((o) => o.op === "write").length,
       replaces: operations.filter((o) => o.op === "replace").length,
+      reads: operations.filter((o) => o.op === "read").length,
       fileCount: fileList.length,
       errorCount: operations.filter((o) => o.status === "error").length,
     },

@@ -126,7 +126,7 @@
               <div class="text-xs text-gray-500 mt-0.5">REPLACES</div>
             </div>
             <div>
-              <div class="text-lg font-bold" :class="result.stats.errorCount ? 'text-red-600' : 'text-green-700'">{{ result.stats.errorCount }}</div>
+              <div class="text-lg font-bold" :class="result.stats.errorCount ? 'text-amber-600' : 'text-green-700'">{{ result.stats.errorCount }}</div>
               <div class="text-xs text-gray-500 mt-0.5">ERRORS</div>
             </div>
           </div>
@@ -183,17 +183,17 @@
     <div style="border: 1px solid #e5e7eb;">
       <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
         <span>Agent 操作{{ result ? ' (' + result.operations.length + ')' : '' }}</span>
-        <div v-if="result" class="text-xs text-gray-500 font-normal">{{ result.stats.writes }} writes · {{ result.stats.replaces }} replaces</div>
+        <div v-if="result" class="text-xs text-gray-500 font-normal">{{ result.stats.writes }} writes · {{ result.stats.replaces }} replaces{{ result.stats.reads ? ' · ' + result.stats.reads + ' reads' : '' }}</div>
       </div>
       <div class="overflow-y-auto" style="max-height: 220px;">
         <div v-if="!result" class="p-4 text-xs text-gray-400">解析后在此显示 Agent 操作日志...</div>
         <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center cursor-pointer hover:bg-gray-50" :style="op.status === 'error' ? 'background: #fffbeb;' : ''" @click="showDiff(op)">
           <span class="text-gray-400 shrink-0" style="min-width: 32px;">{{ String(op.idx).padStart(3, '0') }}</span>
-          <span class="font-bold shrink-0" :class="op.status === 'error' ? 'text-amber-600' : (op.op === 'write' ? 'text-green-700' : 'text-blue-700')" style="min-width: 64px;">{{ op.op === 'write' ? 'WRITE' : 'REPLACE' }}</span>
-          <span class="text-gray-900 break-all flex-1">{{ op.path }}</span>
-          <span v-if="op.status === 'error'" class="text-amber-700 shrink-0" style="max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="op.error">Error: {{ op.error }}</span>
+          <span class="font-bold shrink-0" :class="op.status === 'error' ? 'text-amber-600' : (op.op === 'write' ? 'text-green-700' : op.op === 'replace' ? 'text-blue-700' : 'text-gray-500')" style="min-width: 64px;">{{ op.op.toUpperCase() }}</span>
+          <span class="text-gray-900 break-all shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" :style="op.status === 'error' ? 'max-width: 260px;' : ''" :class="op.status !== 'error' ? 'flex-1' : ''" :title="op.path">{{ op.path }}</span>
+          <span v-if="op.status === 'error'" class="text-amber-700 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" :title="op.error">{{ op.error }}</span>
           <span class="text-gray-500 shrink-0">
-            <template v-if="op.op === 'write'">{{ fmtSize(op.size) }}</template>
+            <template v-if="op.op === 'write' || op.op === 'read'">{{ fmtSize(op.size) }}</template>
             <template v-else>old={{ op.oldLen }} · new={{ op.newLen }}</template>
           </span>
         </div>
@@ -281,7 +281,7 @@
               </button>
             </div>
             <span class="font-bold ml-2">op#{{ diffViewing.idx }}</span>
-            <span class="ml-2 font-bold" :class="diffViewing.op === 'write' ? 'text-green-700' : 'text-blue-700'">{{ diffViewing.op === 'write' ? 'WRITE' : 'REPLACE' }}</span>
+            <span class="ml-2 font-bold" :class="diffViewing.op === 'write' ? 'text-green-700' : diffViewing.op === 'replace' ? 'text-blue-700' : 'text-gray-500'">{{ diffViewing.op.toUpperCase() }}</span>
             <span v-if="diffViewing.status === 'error'" class="ml-2 text-amber-600 font-bold">WARN</span>
             <span class="text-gray-500 ml-2 break-all">{{ diffViewing.path }}</span>
           </div>

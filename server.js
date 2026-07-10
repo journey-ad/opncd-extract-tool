@@ -234,7 +234,7 @@ app.get("/api/ops/:jobId", async (req, res) => {
     res.json(operations.map((op, i) => {
       let diff = op.diff;
       if (!diff) {
-        if (op.op === "write" && op.content) {
+        if ((op.op === "write" || op.op === "read") && op.content) {
           diff = createPatch(op.filePath, "", op.content, "", "");
         } else if (op.op === "replace" && op.oldString !== null && op.newString !== null) {
           diff = createPatch(op.filePath, op.oldString, op.newString, "", "");
