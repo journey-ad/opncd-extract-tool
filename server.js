@@ -4,29 +4,67 @@
 //    GET  /                  WebUI（静态文件）
 //    POST /api/parse         body:{url} -> {jobId, files, stats, ...}
 //    GET  /api/download/:jobId  -> zip 文件
+//
+//  持久化方案：每个 jobId 在 runtime/<jobId>/ 下落盘
+//    share.html   原始分享页 HTML
+//    result.zip   解析打包后的 zip
+//    meta.json    元数据（title / directory / 创建时间）
 // ============================================================
 
 import express from "express";
 import path from "node:path";
+import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import { parseShareHtml } from "./parser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
+const RUNTIME_DIR = path.join(__dirname, "runtime");
+const JOB_TTL = 30 * 60 * 1000;
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 内存缓存解析结果，30 分钟过期
-const jobs = new Map();
-const JOB_TTL = 30 * 60 * 1000;
-
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-function cleanupJobs() {
+
+async function ensureRuntimeDir() {
+  await fs.mkdir(RUNTIME_DIR, { recursive: true });
+}
+
+function jobDir(jobId) {
+  return path.join(RUNTIME_DIR, jobId);
+}
+
+async function readMeta(jobId) {
+  try {
+    const raw = await fs.readFile(path.join(jobDir(jobId), "meta.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function cleanupJobs() {
   const cutoff = Date.now() - JOB_TTL;
-  for (const [k, v] of jobs) if (v.ts < cutoff) jobs.delete(k);
+  let entries;
+  try {
+    entries = await fs.readdir(RUNTIME_DIR, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const dir = path.join(RUNTIME_DIR, ent.name);
+    try {
+      const st = await fs.stat(dir);
+      if (st.mtimeMs < cutoff) await fs.rm(dir, { recursive: true, force: true });
+    } catch {
+      // 单个目录失败不影响其他清理
+    }
+  }
 }
 
 async function fetchShareHtml(url) {
@@ -44,14 +82,35 @@ app.post("/api/parse", async (req, res) => {
   try {
     const html = await fetchShareHtml(url);
     const result = parseShareHtml(html);
+
     const jobId = genId();
-    jobs.set(jobId, {
-      files: result.files,
-      directory: result.directory,
-      title: result.title,
-      ts: Date.now(),
+    const dir = jobDir(jobId);
+    await fs.mkdir(dir, { recursive: true });
+
+    // 1. 落盘原始 share html
+    await fs.writeFile(path.join(dir, "share.html"), html, "utf8");
+
+    // 2. 生成并落盘 zip
+    const zip = new JSZip();
+    for (const f of result.files) zip.file(f.path, f.content, { createFolders: false });
+    const buf = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 },
     });
+    await fs.writeFile(path.join(dir, "result.zip"), buf);
+
+    // 3. 落盘元数据
+    const meta = {
+      jobId,
+      title: result.title,
+      directory: result.directory,
+      createdAt: Date.now(),
+    };
+    await fs.writeFile(path.join(dir, "meta.json"), JSON.stringify(meta), "utf8");
+
     cleanupJobs();
+
     res.json({
       jobId,
       directory: result.directory,
@@ -67,26 +126,33 @@ app.post("/api/parse", async (req, res) => {
 });
 
 app.get("/api/download/:jobId", async (req, res) => {
-  const job = jobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ error: "任务不存在或已过期，请重新解析" });
+  const { jobId } = req.params;
+  if (!/^[a-z0-9-]+$/i.test(jobId)) return res.status(400).json({ error: "非法 jobId" });
+
+  const zipPath = path.join(jobDir(jobId), "result.zip");
+  if (!existsSync(zipPath)) return res.status(404).json({ error: "任务不存在或已过期，请重新解析" });
+
+  const meta = await readMeta(jobId);
+  const utf8Name = ((meta && meta.title) || "opncd-restore").slice(0, 50) + ".zip";
+  res.set("Content-Type", "application/zip");
+  // RFC 5987/6266：非 ASCII 文件名用 filename*=UTF-8'' 编码，filename="..." 作 ASCII fallback。
+  res.set("Content-Disposition", `attachment; filename="restore.zip"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`);
+
   try {
-    const zip = new JSZip();
-    for (const f of job.files) zip.file(f.path, f.content, { createFolders: false });
-    const buf = await zip.generateAsync({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
+    const stream = (await import("node:fs")).createReadStream(zipPath);
+    stream.on("error", (e) => {
+      if (!res.headersSent) res.status(500).json({ error: "读取失败: " + e.message });
     });
-    // RFC 5987/6266：非 ASCII 文件名用 filename*=UTF-8'' 编码，filename="..." 作 ASCII fallback。
-    const utf8Name = (job.title || "opncd-restore").slice(0, 50) + ".zip";
-    res.set("Content-Type", "application/zip");
-    res.set("Content-Disposition", `attachment; filename="restore.zip"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`);
-    res.send(buf);
+    stream.pipe(res);
   } catch (e) {
     res.status(500).json({ error: "打包失败: " + e.message });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`opncd-restore-tool -> http://localhost:${PORT}`);
+ensureRuntimeDir().then(() => {
+  cleanupJobs();
+  app.listen(PORT, () => {
+    console.log(`opncd-restore-tool -> http://localhost:${PORT}`);
+    console.log(`runtime dir -> ${RUNTIME_DIR}`);
+  });
 });
