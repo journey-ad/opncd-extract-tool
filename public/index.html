@@ -9,9 +9,16 @@
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
   <script src="https://unpkg.com/diff@5.2.0/dist/diff.min.js"></script>
+  <script src="https://unpkg.com/marked@12.0.0/marked.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/atom-one-dark.min.css">
   <style>
     * { border-radius: 0 !important; }
+    * { scrollbar-width: thin; scrollbar-color: #9ca3af transparent; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #9ca3af; }
+    ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    ::-webkit-scrollbar-corner { background: transparent; }
     body { font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
     input, select, textarea, button { border: 1px solid #d1d5db; outline: none; }
     input:focus, select:focus, textarea:focus, button:focus { border-color: #6b7280; box-shadow: none; }
@@ -36,6 +43,23 @@
     .op-row:last-child { border-bottom: none; }
     .err-row { border-bottom: 1px solid #fecaca; }
     .err-row:last-child { border-bottom: none; }
+    .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin: 0.6em 0 0.4em; }
+    .markdown-body h2 { font-size: 1.3em; font-weight: bold; margin: 0.6em 0 0.4em; }
+    .markdown-body h3 { font-size: 1.15em; font-weight: bold; margin: 0.5em 0 0.3em; }
+    .markdown-body h4 { font-size: 1em; font-weight: bold; margin: 0.5em 0 0.3em; }
+    .markdown-body p { margin: 0.5em 0; }
+    .markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin: 0.5em 0; }
+    .markdown-body li { margin: 0.2em 0; }
+    .markdown-body pre { background: #f6f8fa; padding: 0.6em; overflow: auto; margin: 0.5em 0; }
+    .markdown-body code { font-family: "SF Mono", "Fira Code", "Consolas", monospace; font-size: 0.95em; }
+    .markdown-body :not(pre) > code { background: #f6f8fa; padding: 0.1em 0.3em; }
+    .markdown-body blockquote { border-left: 3px solid #d1d5db; padding-left: 1em; color: #6b7280; margin: 0.5em 0; }
+    .markdown-body table { border-collapse: collapse; margin: 0.5em 0; }
+    .markdown-body th, .markdown-body td { border: 1px solid #d1d5db; padding: 0.3em 0.6em; }
+    .markdown-body th { background: #f9fafb; font-weight: bold; }
+    .markdown-body a { color: #2563eb; text-decoration: underline; }
+    .markdown-body img { max-width: 100%; }
+    .markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 1em 0; }
   </style>
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
@@ -190,11 +214,17 @@
               <span class="text-gray-400 ml-2">{{ fmtSize(previewing.size) }}</span>
             </template>
           </div>
-          <button class="btn" @click="closePreview" aria-label="关闭" style="padding: 4px 8px; line-height: 0;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-          </button>
+          <div class="flex items-center gap-2">
+            <div v-if="previewing && isMarkdown(previewing.name)" class="flex text-xs" style="border: 1px solid #d1d5db;">
+              <button class="px-2 py-0.5" :class="previewMode === 'source' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700'" @click="previewMode = 'source'">源码</button>
+              <button class="px-2 py-0.5" :class="previewMode === 'rendered' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700'" @click="previewMode = 'rendered'">渲染</button>
+            </div>
+            <button class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 leading-none border-0 bg-transparent cursor-pointer" @click="closePreview" aria-label="关闭">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="flex-1 overflow-auto" :style="previewBgStyle">
           <template v-if="previewLoading">
@@ -204,7 +234,8 @@
             <div class="p-4 text-xs text-red-600">{{ previewError }}</div>
           </template>
           <template v-else-if="previewing.kind === 'text'">
-            <pre class="p-3 m-0 text-xs leading-relaxed whitespace-pre-wrap"><code v-html="highlightedHtml" class="hljs"></code></pre>
+            <div v-if="isMarkdown(previewing.name) && previewMode === 'rendered'" class="markdown-body p-4 text-xs leading-relaxed" v-html="renderedMarkdown"></div>
+            <pre v-else class="p-3 m-0 text-xs leading-relaxed whitespace-pre-wrap"><code v-html="highlightedHtml" class="hljs"></code></pre>
           </template>
           <template v-else-if="previewing.kind === 'image'">
             <div class="flex items-center justify-center min-h-full p-4">
@@ -254,7 +285,7 @@
             <span v-if="diffViewing.status === 'error'" class="ml-2 text-amber-600 font-bold">WARN</span>
             <span class="text-gray-500 ml-2 break-all">{{ diffViewing.path }}</span>
           </div>
-          <button class="btn" @click="closeDiff" aria-label="关闭" style="padding: 4px 8px; line-height: 0;">
+          <button class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 leading-none border-0 bg-transparent cursor-pointer" @click="closeDiff" aria-label="关闭">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 6 6 18M6 6l12 12"/>
             </svg>
@@ -280,6 +311,15 @@
 
   <script>
     const { createApp, ref, computed, watch } = Vue;
+
+    marked.use({
+      renderer: {
+        link(href, title, text) {
+          const titleAttr = title ? ` title="${title}"` : '';
+          return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+        }
+      }
+    });
 
     // ---- 文件树构建（带单子目录压缩）----
     function buildTree(files) {
@@ -352,6 +392,7 @@
         const previewing = ref(null);
         const previewLoading = ref(false);
         const previewError = ref('');
+        const previewMode = ref('rendered');
         let currentBlobUrl = null;
 
         // Diff 相关
@@ -397,10 +438,22 @@
               .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           }
         });
+        const renderedMarkdown = computed(() => {
+          if (!previewing.value || !isMarkdown(previewing.value.name)) return '';
+          try { return marked.parse(previewing.value.content); }
+          catch { return '<p>渲染失败</p>'; }
+        });
         const previewBgStyle = computed(() => {
           if (!previewing.value) return 'background: #fff;';
-          return previewing.value.kind === 'text' ? 'background: #282c34;' : 'background: #fff;';
+          if (previewing.value.kind === 'text' && !(isMarkdown(previewing.value.name) && previewMode.value === 'rendered')) {
+            return 'background: #282c34;';
+          }
+          return 'background: #fff;';
         });
+
+        function isMarkdown(name) {
+          return /\.(md|markdown)$/i.test(name);
+        }
 
         // 文件树
         const tree = computed(() => result.value ? buildTree(result.value.files) : []);
@@ -557,6 +610,7 @@
           previewLoading.value = true;
           previewError.value = '';
           previewing.value = null;
+          previewMode.value = 'rendered';
           try {
             const zip = await ensureZip();
             const file = zip.file(item.node.path);
@@ -592,49 +646,26 @@
         }
 
         function computeDiff(op) {
-          if (op.op === 'write') {
-            const lines = (op.content || '').split('\n');
-            if (lines[lines.length - 1] === '') lines.pop();
-            return lines.map((text, i) => ({ type: 'add', text, oldNum: null, newNum: i + 1 }));
-          }
-          // replace: 优先用 metadata.diff（含原始行号），fallback 到 jsdiff 计算
-          if (op.diff) {
-            const parsed = Diff.parsePatch(op.diff);
-            if (parsed.length && parsed[0].hunks.length) {
-              const result = [];
-              for (const hunk of parsed[0].hunks) {
-                let oldLine = hunk.oldStart;
-                let newLine = hunk.newStart;
-                for (const line of hunk.lines) {
-                  const prefix = line[0];
-                  const text = line.slice(1);
-                  if (prefix === '-') {
-                    result.push({ type: 'del', text, oldNum: oldLine++, newNum: null });
-                  } else if (prefix === '+') {
-                    result.push({ type: 'add', text, oldNum: null, newNum: newLine++ });
-                  } else if (prefix === ' ') {
-                    result.push({ type: 'same', text, oldNum: oldLine++, newNum: newLine++ });
-                  }
-                }
+          if (!op.diff) return [];
+          const parsed = Diff.parsePatch(op.diff);
+          if (!parsed.length || !parsed[0].hunks.length) return [];
+          const result = [];
+          for (const hunk of parsed[0].hunks) {
+            let oldLine = hunk.oldStart;
+            let newLine = hunk.newStart;
+            for (const line of hunk.lines) {
+              const prefix = line[0];
+              const text = line.slice(1);
+              if (prefix === '-') {
+                result.push({ type: 'del', text, oldNum: oldLine++, newNum: null });
+              } else if (prefix === '+') {
+                result.push({ type: 'add', text, oldNum: null, newNum: newLine++ });
+              } else if (prefix === ' ') {
+                result.push({ type: 'same', text, oldNum: oldLine++, newNum: newLine++ });
               }
-              return result;
             }
           }
-          // fallback: 无 diff 时用 jsdiff 计算（无原始行号，从 1 开始）
-          const diff = Diff.diffLines(op.oldString || '', op.newString || '');
-          const lines = [];
-          let oldLine = 1, newLine = 1;
-          for (const part of diff) {
-            const type = part.added ? 'add' : part.removed ? 'del' : 'same';
-            const partLines = part.value.split('\n');
-            if (partLines[partLines.length - 1] === '') partLines.pop();
-            for (const l of partLines) {
-              if (type === 'del') lines.push({ type, text: l, oldNum: oldLine++, newNum: null });
-              else if (type === 'add') lines.push({ type, text: l, oldNum: null, newNum: newLine++ });
-              else lines.push({ type, text: l, oldNum: oldLine++, newNum: newLine++ });
-            }
-          }
-          return lines;
+          return result;
         }
 
         function diffLineStyle(type) {
@@ -695,6 +726,7 @@
           previewing, previewLoading, previewError,
           highlightedHtml, previewBgStyle,
           preview, closePreview,
+          previewMode, isMarkdown, renderedMarkdown,
           diffViewing, diffLoading, diffLines,
           showDiff, closeDiff, diffLineStyle, switchDiff,
         };

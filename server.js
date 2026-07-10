@@ -17,6 +17,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
+import { createPatch } from "diff";
 import { parseShareHtml, parseOperations } from "./parser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -230,18 +231,25 @@ app.get("/api/ops/:jobId", async (req, res) => {
   try {
     const html = await fs.readFile(sharePath, "utf8");
     const operations = parseOperations(html);
-    res.json(operations.map((op, i) => ({
-      idx: i + 1,
-      op: op.op,
-      path: op.filePath,
-      status: op.status || "success",
-      error: op.error || null,
-      replaceAll: !!op.replaceAll,
-      content: op.content || null,
-      oldString: op.oldString || null,
-      newString: op.newString || null,
-      diff: op.diff || null,
-    })));
+    res.json(operations.map((op, i) => {
+      let diff = op.diff;
+      if (!diff) {
+        if (op.op === "write" && op.content) {
+          diff = createPatch(op.filePath, "", op.content, "", "");
+        } else if (op.op === "replace" && op.oldString !== null && op.newString !== null) {
+          diff = createPatch(op.filePath, op.oldString, op.newString, "", "");
+        }
+      }
+      return {
+        idx: i + 1,
+        op: op.op,
+        path: op.filePath,
+        status: op.status || "success",
+        error: op.error || null,
+        replaceAll: !!op.replaceAll,
+        diff: diff || null,
+      };
+    }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
