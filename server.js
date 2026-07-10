@@ -8,7 +8,7 @@
 //  持久化方案：每个 jobId 在 runtime/<jobId>/ 下落盘
 //    share.html   原始分享页 HTML
 //    result.zip   解析打包后的 zip
-//    meta.json    元数据（title / directory / 创建时间）
+//    meta.json    元数据 + 完整响应（缓存命中时直接复用）
 // ============================================================
 
 import express from "express";
@@ -29,6 +29,32 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+function extractShareId(url) {
+  try {
+    const m = new URL(url).pathname.match(/^\/share\/([A-Za-z0-9_-]+)$/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function ts(d = new Date()) {
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+}
+
+function fmtVal(v) {
+  const s = String(v);
+  return /\s/.test(s) ? `"${s}"` : s;
+}
+
+function log(jobId, level, msg, fields = {}) {
+  const pairs = Object.entries(fields)
+    .map(([k, v]) => `${k}=${fmtVal(v)}`)
+    .join("  ");
+  console.log(`${ts()}  ${level.padEnd(5)} [${jobId}] ${msg}  ${pairs}`);
+}
 
 async function ensureRuntimeDir() {
   await fs.mkdir(RUNTIME_DIR, { recursive: true });
@@ -79,11 +105,47 @@ async function fetchShareHtml(url) {
 app.post("/api/parse", async (req, res) => {
   const { url } = req.body || {};
   if (!url || typeof url !== "string") return res.status(400).json({ error: "缺少 url 字段" });
+
+  const shareId = extractShareId(url);
+  const jobId = shareId || genId();
+  const startedAt = Date.now();
+
+  // 缓存命中检查
+  if (shareId) {
+    const cached = await readMeta(jobId);
+    if (cached) {
+      log(jobId, "INFO", "parse start", { url, cached: true });
+      // 更新目录 mtime，避免被 cleanup 清掉
+      try {
+        const now = new Date();
+        await fs.utimes(jobDir(jobId), now, now);
+      } catch {}
+      const elapsed = Date.now() - startedAt;
+      log(jobId, "INFO", "parse done (cache hit)", {
+        title: cached.title || "",
+        files: cached.files.length,
+        ops: cached.stats.operations,
+        errors: cached.stats.errorCount,
+        elapsed: elapsed + "ms",
+      });
+      return res.json({
+        jobId: cached.jobId,
+        directory: cached.directory,
+        title: cached.title,
+        stats: cached.stats,
+        operations: cached.operations,
+        errors: cached.errors,
+        files: cached.files,
+      });
+    }
+  }
+
+  log(jobId, "INFO", "parse start", { url, cached: false });
+
   try {
     const html = await fetchShareHtml(url);
     const result = parseShareHtml(html);
 
-    const jobId = genId();
     const dir = jobDir(jobId);
     await fs.mkdir(dir, { recursive: true });
 
@@ -100,18 +162,8 @@ app.post("/api/parse", async (req, res) => {
     });
     await fs.writeFile(path.join(dir, "result.zip"), buf);
 
-    // 3. 落盘元数据
-    const meta = {
-      jobId,
-      title: result.title,
-      directory: result.directory,
-      createdAt: Date.now(),
-    };
-    await fs.writeFile(path.join(dir, "meta.json"), JSON.stringify(meta), "utf8");
-
-    cleanupJobs();
-
-    res.json({
+    // 3. 落盘元数据（含完整响应字段，供缓存命中直接返回）
+    const response = {
       jobId,
       directory: result.directory,
       title: result.title,
@@ -119,15 +171,36 @@ app.post("/api/parse", async (req, res) => {
       operations: result.operations,
       errors: result.errors.map((e) => ({ filePath: e.op.filePath, reason: e.reason })),
       files: result.files.map((f) => ({ path: f.path, size: f.size })),
+    };
+    const meta = {
+      ...response,
+      shareUrl: url,
+      createdAt: Date.now(),
+    };
+    await fs.writeFile(path.join(dir, "meta.json"), JSON.stringify(meta), "utf8");
+
+    cleanupJobs();
+
+    const elapsed = Date.now() - startedAt;
+    log(jobId, "INFO", "parse done", {
+      title: result.title || "",
+      files: result.files.length,
+      ops: result.stats.operations,
+      errors: result.stats.errorCount,
+      elapsed: elapsed + "ms",
     });
+
+    res.json(response);
   } catch (e) {
+    const elapsed = Date.now() - startedAt;
+    log(jobId, "ERROR", "parse failed", { elapsed: elapsed + "ms", error: e.message });
     res.status(500).json({ error: e.message });
   }
 });
 
 app.get("/api/download/:jobId", async (req, res) => {
   const { jobId } = req.params;
-  if (!/^[a-z0-9-]+$/i.test(jobId)) return res.status(400).json({ error: "非法 jobId" });
+  if (!/^[A-Za-z0-9_-]+$/.test(jobId)) return res.status(400).json({ error: "非法 jobId" });
 
   const zipPath = path.join(jobDir(jobId), "result.zip");
   if (!existsSync(zipPath)) return res.status(404).json({ error: "任务不存在或已过期，请重新解析" });
