@@ -112,7 +112,7 @@
             <template v-if="result.session.tokens">
               <div class="flex">
                 <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Tokens</span>
-                <span class="text-gray-900"><span class="font-bold">{{ fmtNum(result.session.tokens.total) }}</span> <span class="text-gray-400">in {{ fmtNum(result.session.tokens.input) }} · out {{ fmtNum(result.session.tokens.output) }}</span><span v-if="result.session.tokens.reasoning" class="text-purple-600"> · thk {{ fmtNum(result.session.tokens.reasoning) }}</span></span>
+                <span class="text-gray-900"><span class="font-bold">{{ fmtNum(result.session.tokens.total) }}</span> <span class="text-gray-400">in {{ fmtNum(result.session.tokens.input) }} · out {{ fmtNum(result.session.tokens.output) }}</span><span v-if="result.session.tokens.reasoning" class="text-purple-600"> · think {{ fmtNum(result.session.tokens.reasoning) }}</span></span>
               </div>
               <div class="flex">
                 <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Cache</span>
