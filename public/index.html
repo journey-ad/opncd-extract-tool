@@ -823,6 +823,7 @@
           return MIME_MAP[ext] || 'application/octet-stream';
         }
         let activeSW = null;
+        let cachedVfs = null;
         async function ensureSW() {
           if (activeSW) return activeSW;
           const reg = await navigator.serviceWorker.register('/sw.js');
@@ -863,6 +864,8 @@
             sw.postMessage({ type: 'set-vfs', jobId: vfsId, files }, [channel.port2]);
             await done;
 
+            cachedVfs = { vfsId, files };
+
             livePreviewing.value = {
               src: `/preview/${vfsId}/${indexName}`,
               title: result.value.session?.title || indexName,
@@ -879,12 +882,19 @@
           if (livePreviewing.value?.vfsId && activeSW) {
             activeSW.postMessage({ type: 'clear-vfs', jobId: livePreviewing.value.vfsId });
           }
+          cachedVfs = null;
           livePreviewing.value = null;
           livePreviewError.value = '';
           livePreviewLoading.value = false;
         }
 
-        function reloadLivePreview() {
+        async function reloadLivePreview() {
+          if (!cachedVfs) return;
+          const sw = await ensureSW();
+          const channel = new MessageChannel();
+          const done = new Promise(r => { channel.port1.onmessage = r; });
+          sw.postMessage({ type: 'set-vfs', jobId: cachedVfs.vfsId, files: cachedVfs.files }, [channel.port2]);
+          await done;
           livePreviewKey.value++;
         }
 
