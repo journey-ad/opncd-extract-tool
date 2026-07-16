@@ -106,7 +106,19 @@
             <template v-if="result.session.modelID">
               <div class="flex">
                 <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Model</span>
-                <span class="text-gray-900">{{ result.session.modelID }} <span v-if="result.session.providerID" class="text-gray-400 ml-1">({{ result.session.providerID }})</span></span>
+                <span class="text-gray-900">{{ result.session.modelID }} <span v-if="result.session.providerID" class="text-gray-400 ml-1">({{ result.session.providerID }})</span><span v-if="result.session.family || result.session.variant" class="text-gray-400"> · {{ [result.session.family, result.session.variant].filter(Boolean).join('/') }}</span></span>
+              </div>
+            </template>
+            <template v-if="result.session.agent || result.session.reasoningEffort">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Agent</span>
+                <span class="text-gray-900">{{ result.session.agent || '-' }}<span v-if="result.session.reasoningEffort" class="text-gray-400"> · {{ result.session.reasoningEffort }}</span></span>
+              </div>
+            </template>
+            <template v-if="result.session.context">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Context</span>
+                <span class="text-gray-900">{{ fmtNum(result.session.context) }}</span>
               </div>
             </template>
             <template v-if="result.session.tokens">
@@ -123,6 +135,12 @@
               <div class="flex">
                 <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Time</span>
                 <span class="text-gray-900">{{ fmtTime(result.session.timeCreated) }}<span v-if="result.session.requests" class="text-gray-400"> · {{ result.session.requests }} reqs</span><span v-if="result.session.timeUpdated" class="text-gray-400"> · {{ fmtDuration(result.session.timeCreated, result.session.timeUpdated) }}</span></span>
+              </div>
+            </template>
+            <template v-if="result.session.version || result.session.releaseDate">
+              <div class="flex">
+                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Version</span>
+                <span class="text-gray-900">{{ result.session.version || '-' }}<span v-if="result.session.releaseDate" class="text-gray-400"> · {{ result.session.releaseDate }}</span></span>
               </div>
             </template>
           </div>

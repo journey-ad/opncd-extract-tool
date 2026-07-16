@@ -125,6 +125,24 @@ function extractSession(html) {
 
   session.modelID = (script.match(/modelID:"([^"]+)"/) || [])[1] || null;
   session.providerID = (script.match(/providerID:"([^"]+)"/) || [])[1] || null;
+  session.family = (script.match(/family:"([^"]+)"/) || [])[1] || null;
+  session.variant = (script.match(/variant:"([^"]+)"/) || [])[1] || null;
+  session.agent = (script.match(/agent:"([^"]+)"/) || [])[1] || null;
+  session.reasoningEffort = (script.match(/reasoningEffort:"([^"]+)"/) || [])[1] || null;
+  const ctxM = script.match(/context:(\d+)/);
+  session.context = ctxM ? parseInt(ctxM[1]) : null;
+  session.version = (script.match(/version:"([^"]+)"/) || [])[1] || null;
+  session.releaseDate = (script.match(/release_date:"([^"]+)"/) || [])[1] || null;
+
+  // 代码变更统计 summary:$R[N]={additions:A,deletions:D,files:F}
+  const sumRefM = script.match(/summary:\$R\[(\d+)\]/);
+  if (sumRefM) {
+    const refRe = new RegExp("\\$R\\[" + sumRefM[1] + "\\]=\\{additions:(\\d+),deletions:(\\d+),files:(\\d+)\\}");
+    const sm = script.match(refRe);
+    if (sm) {
+      session.summary = { additions: parseInt(sm[1]), deletions: parseInt(sm[2]), files: parseInt(sm[3]) };
+    }
+  }
 
   // 汇总 token 用量。字段顺序不固定，首个 tokens 可能缺 total，cache 的 read/write 顺序也不固定
   const tokenBlockRe = /tokens:\$R\[\d+\]=\{.*?cache:\$R\[\d+\]=\{[^}]*\}\}/g;
@@ -284,6 +302,14 @@ export function parseShareHtml(html) {
       title: session.title || null,
       modelID: session.modelID || null,
       providerID: session.providerID || null,
+      family: session.family || null,
+      variant: session.variant || null,
+      agent: session.agent || null,
+      reasoningEffort: session.reasoningEffort || null,
+      context: session.context || null,
+      version: session.version || null,
+      releaseDate: session.releaseDate || null,
+      summary: session.summary || null,
       tokens: session.tokens || null,
       timeCreated: session.timeCreated || null,
       timeUpdated: session.timeUpdated || null,
