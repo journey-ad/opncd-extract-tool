@@ -789,6 +789,12 @@
           await showDiff(op);
         }
 
+        const queryUrl = new URLSearchParams(window.location.search).get('url');
+        if (queryUrl) {
+          url.value = queryUrl;
+          parse();
+        }
+
         return {
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
