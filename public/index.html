@@ -64,7 +64,7 @@
   </style>
 </head>
 <body class="bg-white text-gray-900 min-h-screen">
-  <div id="app" class="max-w-7xl mx-auto p-4">
+  <div id="app" class="max-w-7xl mx-auto p-4 min-h-screen flex flex-col">
     <!-- Header -->
     <div class="flex items-center justify-between mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
       <div>
@@ -221,12 +221,12 @@
     </div>
 
     <!-- BOTTOM: Agent Operations Log -->
-    <div style="border: 1px solid #e5e7eb;">
+    <div class="mb-4" style="border: 1px solid #e5e7eb;">
       <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
         <span>Agent 操作{{ result ? ' (' + result.operations.length + ')' : '' }}</span>
         <div v-if="result" class="text-xs text-gray-500 font-normal">{{ result.stats.writes }} writes · {{ result.stats.replaces }} replaces{{ result.stats.reads ? ' · ' + result.stats.reads + ' reads' : '' }}</div>
       </div>
-      <div class="overflow-y-auto" style="max-height: 220px;">
+      <div class="overflow-y-auto" style="max-height: 360px;">
         <div v-if="!result" class="p-4 text-xs text-gray-400">解析后在此显示 Agent 操作日志...</div>
         <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center cursor-pointer hover:bg-gray-50" :style="op.status === 'error' ? 'background: #fffbeb;' : ''" @click="showDiff(op)">
           <span class="text-gray-400 shrink-0" style="min-width: 32px;">{{ String(op.idx).padStart(3, '0') }}</span>
@@ -348,6 +348,15 @@
         </div>
       </div>
     </div>
+
+    <footer class="mt-auto pt-4 pb-2" style="border-top: 1px solid #e5e7eb;">
+      <div class="flex items-center justify-between text-xs text-gray-400">
+        <span>opncd Share Restore</span>
+        <span class="mx-2">·</span>
+        <img src="https://count.getloli.com/@opncd-extract-tool?theme=3d-num&padding=7&offset=0&align=top&scale=0.3&pixelated=1&darkmode=0" alt="visitor count" class="inline-block mr-auto">
+        <a href="https://github.com/journey-ad/opncd-extract-tool" target="_blank" class="hover:text-gray-600">Source</a>
+      </div>
+    </footer>
   </div>
 
   <script>

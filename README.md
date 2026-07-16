@@ -1,4 +1,4 @@
-# opncd-restore-tool
+<p align="center"><img src="https://count.getloli.com/@opncd-extract-tool?theme=3d-num&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" alt="visitor count"></p>
 
 opncd.ai 分享页还原工具。下载 OpenCode 分享页 HTML，解析其中的文件操作序列，重建文件树并打包为 ZIP。
 
