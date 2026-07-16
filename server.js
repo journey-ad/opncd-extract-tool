@@ -23,7 +23,10 @@ import { parseShareHtml, parseOperations } from "./parser.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const RUNTIME_DIR = path.join(__dirname, "runtime");
-const JOB_TTL = 30 * 60 * 1000;
+// CACHE_TTL 缓存保留秒数：-1=永久缓存，正数=TTL 秒（最少 300）
+const rawTtl = parseInt(process.env.CACHE_TTL ?? "1800", 10);
+const CACHE_TTL = rawTtl === -1 ? -1 : Math.max(rawTtl, 300);
+const JOB_TTL_MS = CACHE_TTL > 0 ? CACHE_TTL * 1000 : 0;
 
 const app = express();
 app.use(express.json());
@@ -75,7 +78,8 @@ async function readMeta(jobId) {
 }
 
 async function cleanupJobs() {
-  const cutoff = Date.now() - JOB_TTL;
+  if (JOB_TTL_MS <= 0) return;
+  const cutoff = Date.now() - JOB_TTL_MS;
   let entries;
   try {
     entries = await fs.readdir(RUNTIME_DIR, { withFileTypes: true });
@@ -116,11 +120,13 @@ app.post("/api/parse", async (req, res) => {
     const cached = await readMeta(jobId);
     if (cached) {
       log(jobId, "INFO", "parse start", { url, cached: true });
-      // 更新目录 mtime，避免被 cleanup 清掉
-      try {
-        const now = new Date();
-        await fs.utimes(jobDir(jobId), now, now);
-      } catch {}
+      // 更新目录 mtime，避免被 cleanup 清掉（永久缓存时无需续期）
+      if (JOB_TTL_MS > 0) {
+        try {
+          const now = new Date();
+          await fs.utimes(jobDir(jobId), now, now);
+        } catch {}
+      }
       const elapsed = Date.now() - startedAt;
       log(jobId, "INFO", "parse done (cache hit)", {
         title: (cached.session?.title || cached.title) || "",
