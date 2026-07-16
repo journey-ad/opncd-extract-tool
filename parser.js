@@ -126,15 +126,16 @@ function extractSession(html) {
   session.modelID = (script.match(/modelID:"([^"]+)"/) || [])[1] || null;
   session.providerID = (script.match(/providerID:"([^"]+)"/) || [])[1] || null;
 
-  // 汇总 token 用量
-  const tokenRe = /tokens:\$R\[\d+\]=\{total:(\d+),input:(\d+),output:(\d+),reasoning:(\d+),cache:\$R\[\d+\]=\{read:(\d+),write:(\d+)\}\}/g;
+  // 汇总 token 用量。字段顺序不固定，首个 tokens 可能缺 total，cache 的 read/write 顺序也不固定
+  const tokenBlockRe = /tokens:\$R\[\d+\]=\{.*?cache:\$R\[\d+\]=\{[^}]*\}\}/g;
   let tm, total = 0, input = 0, output = 0, reasoning = 0, cacheRead = 0, chunks = 0;
-  while ((tm = tokenRe.exec(script)) !== null) {
-    total += parseInt(tm[1]);
-    input += parseInt(tm[2]);
-    output += parseInt(tm[3]);
-    reasoning += parseInt(tm[4]);
-    cacheRead += parseInt(tm[5]);
+  while ((tm = tokenBlockRe.exec(script)) !== null) {
+    const b = tm[0];
+    const pick = (k) => { const m = b.match(new RegExp(k + ":(\\d+)")); return m ? parseInt(m[1]) : 0; };
+    const i = pick("input"), o = pick("output"), r = pick("reasoning");
+    total += pick("total") || (i + o + r);
+    input += i; output += o; reasoning += r;
+    cacheRead += pick("read");
     chunks++;
   }
   if (chunks > 0) {
