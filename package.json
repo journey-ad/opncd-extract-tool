@@ -8,6 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "diff": "^9.0.0",
     "express": "^4.21.2",
     "jszip": "^3.10.1"
   }
