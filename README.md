@@ -34,14 +34,14 @@ pnpm start
 
 ### Docker
 
-镜像构建由 GitHub Actions 自动推送到 ghcr.io，master 分支推送即触发。
+镜像发布在 ghcr.io，直接拉取运行即可。
 
 ```bash
-docker pull ghcr.io/<owner>/opncd-extract-tool:latest
+docker pull ghcr.io/journey-ad/opncd-extract-tool:latest
 docker run -d -p 3000:3000 \
   -v /path/to/runtime:/app/runtime \
   --name opncd-extract \
-  ghcr.io/<owner>/opncd-extract-tool:latest
+  ghcr.io/journey-ad/opncd-extract-tool:latest
 ```
 
 挂载 runtime 卷用于持久化解析缓存，可选。不挂载时功能正常，仅容器重启后缓存丢失。
