@@ -129,7 +129,7 @@ app.post("/api/parse", async (req, res) => {
       }
       const elapsed = Date.now() - startedAt;
       log(jobId, "INFO", "parse done (cache hit)", {
-        title: (cached.session?.title || cached.title) || "",
+        title: cached.session?.title || "",
         files: cached.files.length,
         ops: cached.stats.operations,
         errors: cached.stats.errorCount,
@@ -211,7 +211,7 @@ app.get("/api/download/:jobId", async (req, res) => {
   if (!existsSync(zipPath)) return res.status(404).json({ error: "任务不存在或已过期，请重新解析" });
 
   const meta = await readMeta(jobId);
-  const utf8Name = ((meta && meta.title) || "opncd-restore").slice(0, 50) + ".zip";
+  const utf8Name = ((meta && meta.session?.title) || "opncd-restore").slice(0, 50) + ".zip";
   res.set("Content-Type", "application/zip");
   // RFC 5987/6266：非 ASCII 文件名用 filename*=UTF-8'' 编码，filename="..." 作 ASCII fallback。
   res.set("Content-Disposition", `attachment; filename="restore.zip"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`);
