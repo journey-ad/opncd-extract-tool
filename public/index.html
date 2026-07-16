@@ -376,6 +376,31 @@
       </div>
     </div>
 
+    <!-- Disclaimer Modal -->
+    <div v-if="disclaimer" class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);">
+      <div class="bg-white w-full max-w-lg flex flex-col" style="border: 1px solid #374151;">
+        <div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid #e5e7eb;">
+          <span class="text-sm font-bold">免责声明</span>
+          <button class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 leading-none border-0 bg-transparent cursor-pointer" @click="cancelDisclaimer" aria-label="关闭">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-4 text-xs text-gray-700 leading-relaxed space-y-2">
+          <p>本工具解析的内容来自 opncd.ai 公开分享页面，使用者需自行承担预览和下载相关风险。</p>
+          <p>工具不对分享内容的合法性、安全性、完整性作出担保，请勿将还原后的文件用于侵犯他人权益或违反法律法规的用途。</p>
+          <p>预览和下载即表示您已阅读并同意上述声明。</p>
+          <label class="flex items-center gap-1.5 cursor-pointer select-none text-gray-500 pt-2">
+            <input type="checkbox" v-model="disclaimerSkipToday" class="cursor-pointer">
+            今日不再提示
+          </label>
+        </div>
+        <div class="px-4 py-3 flex justify-center gap-2" style="border-top: 1px solid #e5e7eb;">
+          <button class="btn btn-primary" @click="confirmDisclaimer">同意并继续</button>
+          <button class="btn" @click="cancelDisclaimer">不，我拒绝</button>
+        </div>
+      </div>
+    </div>
+
     <footer class="mt-auto pt-4 pb-2" style="border-top: 1px solid #e5e7eb;">
       <div class="flex items-center justify-between text-xs text-gray-400">
         <span>opncd Share Restore</span>
@@ -477,6 +502,39 @@
         const livePreviewLoading = ref(false);
         const livePreviewError = ref('');
         const livePreviewKey = ref(0);
+
+        // 免责声明
+        const disclaimer = ref(false);
+        const disclaimerAction = ref(null);
+        const disclaimerSkipToday = ref(false);
+        function disclaimerDismissedToday() {
+          const today = new Date().toISOString().slice(0, 10);
+          try {
+            const data = JSON.parse(localStorage.getItem('disclaimer-dismissed') || '{}');
+            return data.date === today;
+          } catch { return false; }
+        }
+        function withDisclaimer(fn) {
+          if (disclaimerDismissedToday()) { fn(); return; }
+          disclaimerAction.value = { fn };
+          disclaimer.value = true;
+        }
+        function confirmDisclaimer() {
+          if (disclaimerSkipToday.value) {
+            const today = new Date().toISOString().slice(0, 10);
+            localStorage.setItem('disclaimer-dismissed', JSON.stringify({ date: today }));
+          }
+          const action = disclaimerAction.value;
+          disclaimer.value = false;
+          disclaimerSkipToday.value = false;
+          disclaimerAction.value = null;
+          if (action?.fn) action.fn();
+        }
+        function cancelDisclaimer() {
+          disclaimer.value = false;
+          disclaimerSkipToday.value = false;
+          disclaimerAction.value = null;
+        }
 
         // Diff 相关
         const diffViewing = ref(null);
@@ -632,7 +690,7 @@
           return plain ? plain[1] : fallback;
         }
 
-        async function download() {
+        async function doDownload() {
           if (!result.value) return;
           downloading.value = true;
           statusType.value = 'info';
@@ -780,7 +838,7 @@
           return sw;
         }
 
-        async function livePreview() {
+        async function doLivePreview() {
           if (!result.value) return;
           livePreviewLoading.value = true;
           livePreviewError.value = '';
@@ -909,6 +967,9 @@
           parse();
         }
 
+        function download() { withDisclaimer(doDownload); }
+        function livePreview() { withDisclaimer(doLivePreview); }
+
         return {
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
@@ -922,6 +983,7 @@
           showDiff, closeDiff, diffLineStyle, switchDiff,
           livePreviewing, livePreviewLoading, livePreviewError,
           livePreview, closeLivePreview, livePreviewKey, reloadLivePreview,
+          disclaimer, disclaimerSkipToday, confirmDisclaimer, cancelDisclaimer,
         };
       }
     }).mount('#app');
