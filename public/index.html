@@ -66,7 +66,7 @@
 <body class="bg-white text-gray-900 min-h-screen">
   <div id="app" class="max-w-7xl mx-auto p-4 min-h-screen flex flex-col">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4 pb-3" style="border-bottom: 1px solid #e5e7eb;">
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
       <div>
         <h1 class="text-sm font-bold tracking-wider">opncd Share Restore</h1>
         <p class="text-xs text-gray-500 mt-0.5">下载 opncd.ai 分享页 · 解析 Agent 产物 · 打包 ZIP</p>
@@ -81,7 +81,7 @@
       <!-- LEFT: Controls -->
       <div class="space-y-4">
 
-        <div style="border: 1px solid #e5e7eb;">
+        <div class="border border-gray-200">
           <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">分享 URL</div>
           <div class="p-3 space-y-2">
             <div class="field-label">分享链接</div>
@@ -93,61 +93,61 @@
           </div>
         </div>
 
-        <div v-if="result" style="border: 1px solid #e5e7eb;">
+        <div v-if="result" class="border border-gray-200">
           <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">会话信息</div>
           <div class="p-3 space-y-1.5 text-xs">
             <div class="flex">
-              <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Title</span>
+              <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Title</span>
               <span class="text-gray-900 break-all">{{ result.session.title || '-' }}</span>
             </div>
             <div class="flex">
-              <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Directory</span>
+              <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Directory</span>
               <span class="text-gray-900 break-all">{{ result.session.directory || '-' }}</span>
             </div>
             <template v-if="result.session.modelID">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Model</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Model</span>
                 <span class="text-gray-900">{{ result.session.modelID }} <span v-if="result.session.providerID" class="text-gray-400 ml-1">({{ result.session.providerID }})</span><span v-if="result.session.family || result.session.variant" class="text-gray-400"> · {{ [result.session.family, result.session.variant].filter(Boolean).join('/') }}</span></span>
               </div>
             </template>
             <template v-if="result.session.agent || result.session.reasoningEffort">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Agent</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Agent</span>
                 <span class="text-gray-900">{{ result.session.agent || '-' }}<span v-if="result.session.reasoningEffort" class="text-gray-400"> · {{ result.session.reasoningEffort }}</span></span>
               </div>
             </template>
             <template v-if="result.session.context">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Context</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Context</span>
                 <span class="text-gray-900">{{ fmtNum(result.session.context) }}</span>
               </div>
             </template>
             <template v-if="result.session.tokens">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Tokens</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Tokens</span>
                 <span class="text-gray-900"><span class="font-bold">{{ fmtNum(result.session.tokens.total) }}</span> <span class="text-gray-400">in {{ fmtNum(result.session.tokens.input) }} · out {{ fmtNum(result.session.tokens.output) }}</span><span v-if="result.session.tokens.reasoning" class="text-purple-600"> · think {{ fmtNum(result.session.tokens.reasoning) }}</span></span>
               </div>
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Cache</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Cache</span>
                 <span class="text-gray-900">{{ fmtNum(result.session.tokens.cacheRead) }} read<span class="text-gray-400"> · {{ cacheHitRate }}% hit · {{ result.session.tokens.chunks }} chunks</span></span>
               </div>
             </template>
             <template v-if="result.session.timeCreated">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Time</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Time</span>
                 <span class="text-gray-900">{{ fmtTime(result.session.timeCreated) }}<span v-if="result.session.requests" class="text-gray-400"> · {{ result.session.requests }} reqs</span><span v-if="result.session.timeUpdated" class="text-gray-400"> · {{ fmtDuration(result.session.timeCreated, result.session.timeUpdated) }}</span></span>
               </div>
             </template>
             <template v-if="result.session.version || result.session.releaseDate">
               <div class="flex">
-                <span class="text-gray-500 uppercase tracking-wider shrink-0" style="min-width: 110px;">Version</span>
+                <span class="text-gray-500 uppercase tracking-wider shrink-0 min-w-[110px]">Version</span>
                 <span class="text-gray-900">{{ result.session.version || '-' }}<span v-if="result.session.releaseDate" class="text-gray-400"> · {{ result.session.releaseDate }}</span></span>
               </div>
             </template>
           </div>
         </div>
 
-        <div v-if="result" style="border: 1px solid #e5e7eb;">
+        <div v-if="result" class="border border-gray-200">
           <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">统计</div>
           <div class="p-3 grid grid-cols-5 gap-2 text-center">
             <div>
@@ -173,34 +173,34 @@
           </div>
         </div>
 
-        <div v-if="result && result.errors.length" style="border: 1px solid #fecaca;">
-          <div class="section-title px-3 py-2 text-xs font-bold" style="background: #fef2f2; color: #dc2626; border-bottom: 1px solid #fecaca;">解析错误 ({{ result.errors.length }})</div>
-          <div class="overflow-y-auto" style="max-height: 160px;">
-            <div v-for="(e, i) in result.errors" :key="i" class="err-row px-3 py-1.5 text-xs flex gap-2" style="background: #fef2f2;">
-              <span class="text-red-600 font-bold shrink-0" style="min-width: 40px;">[ERR]</span>
-              <span class="text-gray-500 shrink-0" style="min-width: 50px;">op#{{ e.idx }}</span>
+        <div v-if="result && result.errors.length" class="border border-red-200">
+          <div class="section-title px-3 py-2 text-xs font-bold bg-red-50 text-red-600 border-b border-red-200">解析错误 ({{ result.errors.length }})</div>
+          <div class="overflow-y-auto max-h-40">
+            <div v-for="(e, i) in result.errors" :key="i" class="err-row px-3 py-1.5 text-xs flex gap-2 bg-red-50">
+              <span class="text-red-600 font-bold shrink-0 min-w-10">[ERR]</span>
+              <span class="text-gray-500 shrink-0 min-w-[50px]">op#{{ e.idx }}</span>
               <span class="text-gray-800 break-all"><span class="font-bold">{{ e.filePath }}</span> · {{ e.reason }}</span>
             </div>
           </div>
         </div>
 
-        <div v-if="result && result.shellWrites && result.shellWrites.length" style="border: 1px solid #fde68a;">
-          <div class="section-title px-3 py-2 text-xs font-bold cursor-pointer flex items-center justify-between" style="background: #fffbeb; color: #b45309; border-bottom: 1px solid #fde68a;" @click="shellWriteExpanded = !shellWriteExpanded">
+        <div v-if="result && result.shellWrites && result.shellWrites.length" class="border border-amber-200">
+          <div class="section-title px-3 py-2 text-xs font-bold cursor-pointer flex items-center justify-between bg-amber-50 text-amber-700 border-b border-amber-200" @click="shellWriteExpanded = !shellWriteExpanded">
             <span>Shell 写入提示 ({{ result.shellWrites.length }})</span>
             <span class="text-xs font-normal">{{ shellWriteExpanded ? '收起' : '展开' }}</span>
           </div>
-          <div class="px-3 py-2 text-xs leading-relaxed" style="background: #fffbeb; color: #92400e;">
+          <div class="px-3 py-2 text-xs leading-relaxed bg-amber-50 text-amber-800">
             检测到 {{ result.shellWrites.length }} 条 shell 命令包含写入操作，shell 写入暂时无法重建，可能影响还原完整性
           </div>
-          <div v-if="shellWriteExpanded" class="overflow-y-auto" style="max-height: 200px; background: #fffbeb;">
-            <div v-for="(cmd, i) in result.shellWrites" :key="i" class="px-3 py-1.5 text-xs flex gap-2" style="border-top: 1px solid #fde68a;">
-              <span class="text-amber-700 font-bold shrink-0" style="min-width: 40px;">[SH]</span>
+          <div v-if="shellWriteExpanded" class="overflow-y-auto max-h-[200px] bg-amber-50">
+            <div v-for="(cmd, i) in result.shellWrites" :key="i" class="px-3 py-1.5 text-xs flex gap-2 border-t border-amber-200">
+              <span class="text-amber-700 font-bold shrink-0 min-w-10">[SH]</span>
               <span class="text-gray-800 break-all font-mono">{{ cmd }}</span>
             </div>
           </div>
         </div>
 
-        <div v-if="result" style="border: 1px solid #e5e7eb;">
+        <div v-if="result" class="border border-gray-200">
           <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">操作</div>
           <div class="p-3 flex gap-2">
             <button class="btn btn-primary" :disabled="downloading || !result.files.length" @click="download">{{ downloading ? '打包中...' : '下载 ZIP' }}</button>
@@ -211,24 +211,24 @@
       </div>
 
       <!-- RIGHT: File Tree -->
-      <div style="border: 1px solid #e5e7eb; display: flex; flex-direction: column; min-height: 0;">
+      <div class="border border-gray-200 flex flex-col min-h-0">
         <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
           <span>文件{{ result ? ' (' + result.files.length + ')' : '' }}</span>
           <div v-if="result && result.files.length" class="text-xs text-gray-500 font-normal">{{ totalSize }}</div>
         </div>
-        <div class="overflow-y-auto" style="flex: 1; min-height: 0; max-height: 560px;">
+        <div class="overflow-y-auto flex-1 min-h-0 max-h-[560px]">
           <div v-if="!result || result.files.length === 0" class="p-4 text-xs text-gray-400">
             {{ !result ? '解析后在此显示文件列表...' : '无文件' }}
           </div>
           <div v-for="item in flatTree" :key="item.node.path" class="tree-row flex items-center text-xs py-1" :style="{ paddingLeft: (10 + item.level * 14) + 'px' }">
             <template v-if="item.node.isDir">
               <span class="cursor-pointer select-none flex items-center gap-1 flex-1" @click="toggle(item.node.path)">
-                <span class="text-gray-400 inline-block" style="width: 10px;">{{ expanded[item.node.path] ? '▾' : '▸' }}</span>
+                <span class="text-gray-400 inline-block w-2.5">{{ expanded[item.node.path] ? '▾' : '▸' }}</span>
                 <span class="text-blue-700 font-bold">{{ item.node.name }}/</span>
               </span>
             </template>
             <template v-else>
-              <span class="text-gray-300 inline-block" style="width: 10px;">·</span>
+              <span class="text-gray-300 inline-block w-2.5">·</span>
               <span class="text-gray-900 break-all flex-1 cursor-pointer hover:text-blue-700" @click="preview(item)">{{ item.node.name }}</span>
               <span class="text-gray-500 shrink-0 ml-2 pr-3">{{ fmtSize(item.node.size) }}</span>
             </template>
@@ -238,17 +238,17 @@
     </div>
 
     <!-- BOTTOM: Agent Operations Log -->
-    <div class="mb-4" style="border: 1px solid #e5e7eb;">
+    <div class="mb-4 border border-gray-200">
       <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50 flex items-center justify-between">
         <span>Agent 操作{{ result ? ' (' + result.operations.length + ')' : '' }}</span>
         <div v-if="result" class="text-xs text-gray-500 font-normal">{{ result.stats.writes }} writes · {{ result.stats.replaces }} replaces{{ result.stats.reads ? ' · ' + result.stats.reads + ' reads' : '' }}</div>
       </div>
-      <div class="overflow-y-auto" style="max-height: 360px;">
+      <div class="overflow-y-auto max-h-[360px]">
         <div v-if="!result" class="p-4 text-xs text-gray-400">解析后在此显示 Agent 操作日志...</div>
-        <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center cursor-pointer hover:bg-gray-50" :style="op.status === 'error' ? 'background: #fffbeb;' : ''" @click="showDiff(op)">
-          <span class="text-gray-400 shrink-0" style="min-width: 32px;">{{ String(op.idx).padStart(3, '0') }}</span>
-          <span class="font-bold shrink-0" :class="op.status === 'error' ? 'text-amber-600' : (op.op === 'write' ? 'text-green-700' : op.op === 'replace' ? 'text-blue-700' : 'text-gray-500')" style="min-width: 64px;">{{ op.op.toUpperCase() }}</span>
-          <span class="text-gray-900 break-all shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" :style="op.status === 'error' ? 'max-width: 260px;' : ''" :class="op.status !== 'error' ? 'flex-1' : ''" :title="op.path">{{ op.path }}</span>
+        <div v-for="op in (result ? result.operations : [])" :key="op.idx" class="op-row px-3 py-1 text-xs flex gap-2 items-center cursor-pointer hover:bg-gray-50" :class="op.status === 'error' ? 'bg-amber-50' : ''" @click="showDiff(op)">
+          <span class="text-gray-400 shrink-0 min-w-8">{{ String(op.idx).padStart(3, '0') }}</span>
+          <span class="font-bold shrink-0 min-w-16" :class="op.status === 'error' ? 'text-amber-600' : (op.op === 'write' ? 'text-green-700' : op.op === 'replace' ? 'text-blue-700' : 'text-gray-500')">{{ op.op.toUpperCase() }}</span>
+          <span class="text-gray-900 break-all shrink-0 overflow-hidden text-ellipsis whitespace-nowrap" :class="op.status === 'error' ? 'max-w-[260px]' : 'flex-1'" :title="op.path">{{ op.path }}</span>
           <span v-if="op.status === 'error'" class="text-amber-700 flex-1 overflow-hidden text-ellipsis whitespace-nowrap" :title="op.error">{{ op.error }}</span>
           <span class="text-gray-500 shrink-0">
             <template v-if="op.op === 'write' || op.op === 'read'">{{ fmtSize(op.size) }}</template>
@@ -259,9 +259,9 @@
     </div>
 
     <!-- Preview Modal -->
-    <div v-if="previewing || previewLoading" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);" @click.self="closePreview">
-      <div class="bg-white w-full max-w-5xl flex flex-col" style="height: 80vh; border: 1px solid #374151;">
-        <div class="flex items-center justify-between px-3 py-2" style="border-bottom: 1px solid #e5e7eb;">
+    <div v-if="previewing || previewLoading" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="closePreview">
+      <div class="bg-white w-full max-w-5xl flex flex-col h-[80vh] border border-gray-700">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
           <div class="text-xs flex items-center">
             <span class="text-gray-400 mr-2">预览</span>
             <template v-if="previewLoading">加载中...</template>
@@ -273,7 +273,7 @@
             </template>
           </div>
           <div class="flex items-center gap-2">
-            <div v-if="previewing && isMarkdown(previewing.name)" class="flex text-xs" style="border: 1px solid #d1d5db;">
+            <div v-if="previewing && isMarkdown(previewing.name)" class="flex text-xs border border-gray-300">
               <button class="px-2 py-0.5" :class="previewMode === 'source' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700'" @click="previewMode = 'source'">源码</button>
               <button class="px-2 py-0.5" :class="previewMode === 'rendered' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700'" @click="previewMode = 'rendered'">渲染</button>
             </div>
@@ -284,7 +284,7 @@
             </button>
           </div>
         </div>
-        <div class="flex-1 overflow-auto" :style="previewBgStyle">
+        <div class="flex-1 overflow-auto" :class="previewBgClass">
           <template v-if="previewLoading">
             <div class="p-4 text-xs text-gray-500">加载中...</div>
           </template>
@@ -321,9 +321,9 @@
     </div>
 
     <!-- Diff Modal -->
-    <div v-if="diffViewing" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);" @click.self="closeDiff">
-      <div class="bg-white w-full max-w-5xl flex flex-col" style="height: 80vh; border: 1px solid #374151;">
-        <div class="flex items-center justify-between px-3 py-2" style="border-bottom: 1px solid #e5e7eb;">
+    <div v-if="diffViewing" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="closeDiff">
+      <div class="bg-white w-full max-w-5xl flex flex-col h-[80vh] border border-gray-700">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
           <div class="text-xs flex items-center">
             <span class="text-gray-400 mr-2">Diff</span>
             <div class="flex flex-col gap-0">
@@ -349,13 +349,13 @@
             </svg>
           </button>
         </div>
-        <div v-if="diffViewing.status === 'error'" class="px-3 py-2 text-xs text-amber-700" style="background: #fffbeb; border-bottom: 1px solid #fde68a;">
+        <div v-if="diffViewing.status === 'error'" class="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-b border-amber-200">
           <span class="font-bold">原始会话错误：</span>{{ diffViewing.error }}
         </div>
-        <div class="flex-1 overflow-auto" style="background: #1e1e1e;">
+        <div class="flex-1 overflow-auto bg-[#1e1e1e]">
           <div v-if="diffLoading" class="p-4 text-xs text-gray-400">加载中...</div>
           <div v-else>
-            <div v-for="(line, i) in diffLines" :key="i" class="px-3 py-0.5 text-xs flex items-start font-mono" :style="diffLineStyle(line.type)">
+            <div v-for="(line, i) in diffLines" :key="i" class="px-3 py-0.5 text-xs flex items-start font-mono" :class="diffLineClass(line.type)">
               <span class="w-12 text-right pr-2 text-gray-500 select-none shrink-0">{{ line.oldNum || '' }}</span>
               <span class="w-12 text-right pr-2 text-gray-500 select-none shrink-0">{{ line.newNum || '' }}</span>
               <span class="w-4 select-none shrink-0">{{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}</span>
@@ -367,9 +367,9 @@
     </div>
 
     <!-- Live Preview Modal -->
-    <div v-if="livePreviewing || livePreviewLoading" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);" @click.self="closeLivePreview">
-      <div class="bg-white w-full max-w-6xl flex flex-col" style="height: 90vh; border: 1px solid #374151;">
-        <div class="flex items-center justify-between px-3 py-2" style="border-bottom: 1px solid #e5e7eb;">
+    <div v-if="livePreviewing || livePreviewLoading" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="closeLivePreview">
+      <div class="bg-white w-full max-w-6xl flex flex-col h-[90vh] border border-gray-700">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
           <div class="text-xs flex items-center">
             <span class="text-gray-400 mr-2">在线预览</span>
             <template v-if="livePreviewLoading">加载中...</template>
@@ -397,9 +397,9 @@
     </div>
 
     <!-- Disclaimer Modal -->
-    <div v-if="disclaimer" class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);">
-      <div class="bg-white w-full max-w-lg flex flex-col" style="border: 1px solid #374151;">
-        <div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid #e5e7eb;">
+    <div v-if="disclaimer" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+      <div class="bg-white w-full max-w-lg flex flex-col border border-gray-700">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <span class="text-sm font-bold">免责声明</span>
           <button class="text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 leading-none border-0 bg-transparent cursor-pointer" @click="cancelDisclaimer" aria-label="关闭">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -414,14 +414,14 @@
             今日不再提示
           </label>
         </div>
-        <div class="px-4 py-3 flex justify-center gap-2" style="border-top: 1px solid #e5e7eb;">
+        <div class="px-4 py-3 flex justify-center gap-2 border-t border-gray-200">
           <button class="btn btn-primary" @click="confirmDisclaimer">同意并继续</button>
           <button class="btn" @click="cancelDisclaimer">不，我拒绝</button>
         </div>
       </div>
     </div>
 
-    <footer class="mt-auto pt-4 pb-2" style="border-top: 1px solid #e5e7eb;">
+    <footer class="mt-auto pt-4 pb-2 border-t border-gray-200">
       <div class="flex items-center justify-between text-xs text-gray-400">
         <span>opncd Share Restore</span>
         <span class="mx-2">·</span>
@@ -606,12 +606,12 @@
           try { return marked.parse(previewing.value.content); }
           catch { return '<p>渲染失败</p>'; }
         });
-        const previewBgStyle = computed(() => {
-          if (!previewing.value) return 'background: #fff;';
+        const previewBgClass = computed(() => {
+          if (!previewing.value) return 'bg-white';
           if (previewing.value.kind === 'text' && !(isMarkdown(previewing.value.name) && previewMode.value === 'rendered')) {
-            return 'background: #282c34;';
+            return 'bg-[#282c34]';
           }
-          return 'background: #fff;';
+          return 'bg-white';
         });
 
         function isMarkdown(name) {
@@ -965,10 +965,10 @@
           return result;
         }
 
-        function diffLineStyle(type) {
-          if (type === 'add') return 'background: #1e3a1e; color: #6ee7b7;';
-          if (type === 'del') return 'background: #3a1e1e; color: #fca5a5;';
-          return 'color: #d1d5db;';
+        function diffLineClass(type) {
+          if (type === 'add') return 'bg-[#1e3a1e] text-[#6ee7b7]';
+          if (type === 'del') return 'bg-[#3a1e1e] text-[#fca5a5]';
+          return 'text-gray-300';
         }
 
         async function ensureOps() {
@@ -1031,11 +1031,11 @@
           shellWriteExpanded,
           parse, download, fmtSize, fmtNum, fmtTime, fmtDuration, cacheHitRate,
           previewing, previewLoading, previewError,
-          highlightedHtml, previewBgStyle,
+          highlightedHtml, previewBgClass,
           preview, closePreview,
           previewMode, isMarkdown, renderedMarkdown,
           diffViewing, diffLoading, diffLines,
-          showDiff, closeDiff, diffLineStyle, switchDiff,
+          showDiff, closeDiff, diffLineClass, switchDiff,
           livePreviewing, livePreviewLoading, livePreviewError,
           livePreview, closeLivePreview, livePreviewKey, reloadLivePreview,
           livePreviewFrame, isLivePreviewFullscreen, toggleLivePreviewFullscreen,
