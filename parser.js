@@ -177,9 +177,14 @@ function extractSession(html) {
 export function parseOperations(html) {
   const states = findStates(html);
   const operations = [];
+  const shellWrites = [];
   for (const s of states) {
     const filePath = extractField(s.text, "filePath");
-    if (!filePath) continue;
+    if (!filePath) {
+      const cmd = extractField(s.text, "command");
+      if (cmd && isShellWriteCommand(cmd)) shellWrites.push(cmd);
+      continue;
+    }
     const content = extractField(s.text, "content");
     const oldString = extractField(s.text, "oldString");
     const newString = extractField(s.text, "newString");
@@ -205,7 +210,49 @@ export function parseOperations(html) {
       }
     }
   }
-  return operations;
+  return { operations, shellWrites };
+}
+
+// 识别 shell 命令是否包含文件写入操作（PowerShell / bash 等）。
+// 仅匹配强写入信号，宁缺毋滥，避免对纯查询命令误报。
+function isShellWriteCommand(cmd) {
+  if (!cmd) return false;
+
+  // PowerShell 写入 cmdlet
+  if (/\b(Set-Content|Add-Content|Out-File|Tee-Object)\b/.test(cmd)) return true;
+
+  // .NET 文件写入方法
+  if (/\bWriteAll(Text|Bytes|Lines)\b/.test(cmd)) return true;
+
+  // New-Item 创建文件并写入
+  if (/\bNew-Item\b/.test(cmd) && /\b-Value\b/.test(cmd)) return true;
+
+  // 文件重定向：> 或 >> 后跟文件名 token
+  // > 前必须是命令分隔符（行首/空白/;|&()），避免匹配字符串内的 > （如 echo "a>bb"）
+  // token 必须是合法文件名形态（首字符为字母/下划线/点/斜杠），至少 2 字符
+  const redirectM = cmd.match(/(^|[;\s|&(])>>?\s*([A-Za-z_./][A-Za-z0-9_./:-]+)/);
+  if (redirectM) {
+    const t = redirectM[2];
+    if (!["NUL", "null", "true", "false", "/dev/null", "dev/null"].includes(t)) return true;
+  }
+
+  // tee 写入文件（排除 tee -Option）
+  if (/\btee\b(?!\s*-)/.test(cmd)) return true;
+
+  // dd of=
+  if (/\bdd\b[^|]*\bof=/.test(cmd)) return true;
+
+  // 网络下载到文件
+  if (/\b(Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b/.test(cmd) && /-OutFile\b/.test(cmd)) return true;
+  if (/\bcurl\b[^|]*\s-o\s/.test(cmd)) return true;
+  if (/\bwget\b[^|]*\s-O\s/.test(cmd)) return true;
+
+  // 文件复制/移动/重命名（影响还原结果）
+  if (/\b(Copy-Item|Move-Item|Rename-Item)\b/.test(cmd)) return true;
+  if (/(?:^|[;&|]\s*)cp\b/.test(cmd)) return true;
+  if (/(?:^|[;&|]\s*)mv\b/.test(cmd)) return true;
+
+  return false;
 }
 
 function applyOperations(operations) {
@@ -277,7 +324,7 @@ function makeToRelPath(directory) {
 
 export function parseShareHtml(html) {
   const session = extractSession(html);
-  const operations = parseOperations(html);
+  const { operations, shellWrites } = parseOperations(html);
   const { files, errors } = applyOperations(operations);
 
   const toRel = makeToRelPath(session.directory);
@@ -318,6 +365,7 @@ export function parseShareHtml(html) {
     files: fileList,
     operations: opList,
     errors,
+    shellWrites,
     stats: {
       operations: operations.length,
       writes: operations.filter((o) => o.op === "write").length,
@@ -325,6 +373,7 @@ export function parseShareHtml(html) {
       reads: operations.filter((o) => o.op === "read").length,
       fileCount: fileList.length,
       errorCount: operations.filter((o) => o.status === "error").length,
+      shellWriteCount: shellWrites.length,
     },
   };
 }

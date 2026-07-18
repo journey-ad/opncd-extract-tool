@@ -141,6 +141,7 @@ app.post("/api/parse", async (req, res) => {
         stats: cached.stats,
         operations: cached.operations,
         errors: cached.errors,
+        shellWrites: cached.shellWrites || [],
         files: cached.files,
       });
     }
@@ -175,6 +176,7 @@ app.post("/api/parse", async (req, res) => {
       stats: result.stats,
       operations: result.operations,
       errors: result.errors.map((e) => ({ idx: e.idx, filePath: e.op.filePath, reason: e.reason })),
+      shellWrites: result.shellWrites,
       files: result.files.map((f) => ({ path: f.path, size: f.size })),
     };
     const meta = {
@@ -234,7 +236,7 @@ app.get("/api/ops/:jobId", async (req, res) => {
   if (!existsSync(sharePath)) return res.status(404).json({ error: "分享页不存在或已过期" });
   try {
     const html = await fs.readFile(sharePath, "utf8");
-    const operations = parseOperations(html);
+    const { operations } = parseOperations(html);
     res.json(operations.map((op, i) => {
       let diff = op.diff;
       if (!diff) {

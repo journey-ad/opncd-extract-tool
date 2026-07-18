@@ -184,6 +184,22 @@
           </div>
         </div>
 
+        <div v-if="result && result.shellWrites && result.shellWrites.length" style="border: 1px solid #fde68a;">
+          <div class="section-title px-3 py-2 text-xs font-bold cursor-pointer flex items-center justify-between" style="background: #fffbeb; color: #b45309; border-bottom: 1px solid #fde68a;" @click="shellWriteExpanded = !shellWriteExpanded">
+            <span>Shell 写入提示 ({{ result.shellWrites.length }})</span>
+            <span class="text-xs font-normal">{{ shellWriteExpanded ? '收起' : '展开' }}</span>
+          </div>
+          <div class="px-3 py-2 text-xs leading-relaxed" style="background: #fffbeb; color: #92400e;">
+            检测到 {{ result.shellWrites.length }} 条 shell 命令包含写入操作，shell 写入暂时无法重建，可能影响还原完整性
+          </div>
+          <div v-if="shellWriteExpanded" class="overflow-y-auto" style="max-height: 200px; background: #fffbeb;">
+            <div v-for="(cmd, i) in result.shellWrites" :key="i" class="px-3 py-1.5 text-xs flex gap-2" style="border-top: 1px solid #fde68a;">
+              <span class="text-amber-700 font-bold shrink-0" style="min-width: 40px;">[SH]</span>
+              <span class="text-gray-800 break-all font-mono">{{ cmd }}</span>
+            </div>
+          </div>
+        </div>
+
         <div v-if="result" style="border: 1px solid #e5e7eb;">
           <div class="section-title px-3 py-2 text-xs font-bold bg-gray-50">操作</div>
           <div class="p-3 flex gap-2">
@@ -606,10 +622,12 @@
         const tree = computed(() => result.value ? buildTree(result.value.files) : []);
         const expanded = ref({});
         const flatTree = computed(() => flattenTree(tree.value, expanded.value));
+        const shellWriteExpanded = ref(false);
 
         // result 变化时初始化展开状态：<50 全展开，>=50 只展开顶层
         watch(() => result.value, (r) => {
           if (!r) { expanded.value = {}; return; }
+          shellWriteExpanded.value = false;
           const exp = {};
           if (r.files.length < 50) {
             function walk(nodes) {
@@ -679,7 +697,7 @@
             if (!r.ok) throw new Error(data.error || '解析失败');
             result.value = data;
             statusType.value = 'success';
-            statusMsg.value = `解析完成 · ${data.stats.fileCount} 个文件 · ${data.stats.operations} 次操作` + (data.stats.errorCount ? ` · ${data.stats.errorCount} 个错误` : '');
+            statusMsg.value = `解析完成 · ${data.stats.fileCount} 个文件 · ${data.stats.operations} 次操作` + (data.stats.errorCount ? ` · ${data.stats.errorCount} 个错误` : '') + (data.stats.shellWriteCount ? ` · ${data.stats.shellWriteCount} 条 shell 写入未还原` : '');
           } catch (e) {
             statusType.value = 'error';
             statusMsg.value = '错误：' + e.message;
@@ -1010,6 +1028,7 @@
           url, parsing, downloading, result, statusMsg, statusMsgClass,
           statusText, statusColor, dotClass, totalSize,
           tree, expanded, flatTree, toggle,
+          shellWriteExpanded,
           parse, download, fmtSize, fmtNum, fmtTime, fmtDuration, cacheHitRate,
           previewing, previewLoading, previewError,
           highlightedHtml, previewBgStyle,
