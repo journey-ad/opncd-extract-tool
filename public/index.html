@@ -856,6 +856,10 @@
             const allFiles = Object.values(zip.files).filter(f => !f.dir);
             let indexName = allFiles.find(f => f.name === 'index.html')?.name
               || allFiles.find(f => f.name.endsWith('/index.html'))?.name;
+            if (!indexName) {
+              const htmlFiles = allFiles.filter(f => f.name.endsWith('.html'));
+              if (htmlFiles.length === 1) indexName = htmlFiles[0].name;
+            }
             if (!indexName) throw new Error('未找到 index.html');
 
             const files = {};
