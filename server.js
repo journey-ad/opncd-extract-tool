@@ -32,11 +32,9 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-
 function extractShareId(url) {
   try {
-    const m = new URL(url).pathname.match(/^\/share\/([A-Za-z0-9_-]+)$/);
+    const m = new URL(url).pathname.match(/^\/share\/([A-Za-z0-9_-]{8})$/);
     return m ? m[1] : null;
   } catch {
     return null;
@@ -112,7 +110,8 @@ app.post("/api/parse", async (req, res) => {
   if (!url || typeof url !== "string") return res.status(400).json({ error: "缺少 url 字段" });
 
   const shareId = extractShareId(url);
-  const jobId = shareId || genId();
+  if (!shareId) return res.status(400).json({ error: "URL 不合法，请输入 opncd.ai 8 位分享 ID" });
+  const jobId = shareId;
   const startedAt = Date.now();
 
   // 缓存命中检查
@@ -152,6 +151,11 @@ app.post("/api/parse", async (req, res) => {
   try {
     const html = await fetchShareHtml(url);
     const result = parseShareHtml(html);
+
+    if (result.stats.operations === 0) {
+      log(jobId, "WARN", "parse empty", { url });
+      return res.status(422).json({ error: "无法解析该分享页：未提取到任何文件操作，可能分享不存在或已失效" });
+    }
 
     const dir = jobDir(jobId);
     await fs.mkdir(dir, { recursive: true });
