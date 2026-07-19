@@ -812,7 +812,8 @@
                 size: item.node.size, content, lang: inferLang(item.node.name),
               };
             } else {
-              const blob = await file.async('blob');
+              const raw = await file.async('blob');
+              const blob = new Blob([raw], { type: getMime(item.node.name) });
               currentBlobUrl = URL.createObjectURL(blob);
               previewing.value = {
                 kind, name: item.node.name, path: item.node.path,
