@@ -87,7 +87,7 @@
           <div class="p-3 space-y-2">
             <div class="field-label">分享链接</div>
             <div class="flex gap-2">
-              <input v-model="url" class="field-input flex-1" placeholder="https://opncd.ai/share/XXXXXXX" :disabled="parsing" @keydown.enter="parse">
+              <input v-model.trim="url" class="field-input flex-1" placeholder="https://opncd.ai/share/XXXXXXX" :disabled="parsing" @keydown.enter="parse">
               <button class="btn btn-primary whitespace-nowrap" :disabled="parsing" @click="parse">{{ parsing ? '解析中...' : '解析' }}</button>
             </div>
             <div v-if="statusMsg" class="text-xs leading-relaxed" :class="statusMsgClass">{{ statusMsg }}</div>
@@ -1024,7 +1024,7 @@
 
         const queryUrl = new URLSearchParams(window.location.search).get('url');
         if (queryUrl) {
-          url.value = queryUrl;
+          url.value = queryUrl.trim();
           parse();
         }
 
