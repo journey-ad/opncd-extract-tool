@@ -18,7 +18,9 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   const m = url.pathname.match(/^\/preview\/([^/]+)\/(.*)$/);
   if (!m) return;
-  const [, jobId, path] = m;
+  const [, jobId, rawPath] = m;
+  let path = rawPath;
+  try { path = decodeURIComponent(path); } catch {}
   const fs = vfsMap.get(jobId);
   if (!fs) {
     e.respondWith(new Response('VFS not ready', { status: 503 }));
